@@ -228,7 +228,6 @@ def get_cargo_operation(operation_id):
 def create_cargo_operation():
     data = request.get_json()
 
-    # 🔹 Remove start_datetime from required
     required = ["gate_entry_id", "operation_type"]
     missing = [f for f in required if not data.get(f)]
     if missing:
@@ -238,7 +237,10 @@ def create_cargo_operation():
     cursor = conn.cursor()
 
     try:
-        # 🔹 Insert with optional start/end
+        start_dt = data.get("start_datetime") or None
+        end_dt = data.get("end_datetime") or None
+
+        # ✅ Insert
         cursor.execute("""
             INSERT INTO cargo_operations 
             (gate_entry_id, operation_type, start_datetime, end_datetime, compressor_no, remarks)
@@ -246,32 +248,37 @@ def create_cargo_operation():
         """, (
             data["gate_entry_id"],
             data["operation_type"],
-            data.get("start_datetime"),   # optional
-            data.get("end_datetime"),     # optional
+            start_dt,
+            end_dt,
             data.get("compressor_no"),
             data.get("remarks")
         ))
 
-        # 🔹 Update status properly (IMPORTANT FIX)
-        status_map = {
-            "UNLOADING": "UNLOADING",
-            "LOADING": "UNLOADING"  # or change if needed
-        }
+        # ✅ STATUS LOGIC FIX
+        if start_dt and not end_dt:
+            # Operation started
+            new_status = "UNLOADING"
 
-        cursor.execute("""
-            UPDATE gate_entries 
-            SET status=%s 
-            WHERE id=%s
-        """, (
-            status_map.get(data["operation_type"], "UNLOADING"),
-            data["gate_entry_id"]
-        ))
+        elif end_dt:
+            # Operation completed
+            new_status = "PENDING_WBOUT"
+
+        else:
+            new_status = None  # no change
+
+        # ✅ Only update if needed
+        if new_status:
+            cursor.execute("""
+                UPDATE gate_entries 
+                SET status=%s 
+                WHERE id=%s
+            """, (new_status, data["gate_entry_id"]))
 
         conn.commit()
 
         return jsonify({
             "success": True,
-            "message": "Operation created (start/end optional)"
+            "message": "Operation created (status handled correctly)"
         }), 201
 
     except Exception as e:
