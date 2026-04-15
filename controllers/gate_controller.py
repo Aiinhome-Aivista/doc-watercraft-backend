@@ -116,7 +116,7 @@ def create_wbin():
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        # 🔹 Get gate entry + vessel direction
+        # Get gate entry + vessel direction
         cursor.execute("""
             SELECT ge.status, v.direction
             FROM gate_entries ge
@@ -137,7 +137,7 @@ def create_wbin():
                 "message": f"Entry status is {status}, not PENDING_WBIN"
             }), 400
 
-        # 🔥 Apply condition
+        # Apply condition
         gross_weight = None
         tare_weight = None
 
@@ -151,7 +151,7 @@ def create_wbin():
             if not tare_weight:
                 return jsonify({"success": False, "message": "tare_weight required for IMPORT"}), 400
 
-        # 🔹 Insert WBIN
+        # Insert WBIN
         cursor.execute("""
             INSERT INTO wbin_records 
             (gate_entry_id, weighment_slip_no, wbin_datetime, gross_weight, tare_weight)
@@ -164,7 +164,7 @@ def create_wbin():
             tare_weight
         ))
 
-        # 🔹 Update status
+        # Update status
         cursor.execute("""
             UPDATE gate_entries 
             SET status='WBIN_DONE' 
@@ -187,33 +187,155 @@ def create_wbin():
         conn.close()
 
 # ---------- Cargo Operation (Loading/Unloading) ----------
+def get_cargo_operation(operation_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute("""
+            SELECT id, gate_entry_id, operation_type,
+                   start_datetime, end_datetime,
+                   compressor_no, remarks, created_at
+            FROM cargo_operations
+            WHERE id = %s
+        """, (operation_id,))
+
+        row = cursor.fetchone()
+
+        if not row:
+            return jsonify({
+                "success": False,
+                "message": "Cargo operation not found"
+            }), 404
+
+        cols = [c[0] for c in cursor.description]
+        data = dict(zip(cols, row))
+
+        return jsonify({
+            "success": True,
+            "data": data
+        })
+
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
+
+    finally:
+        cursor.close()
+        conn.close()
+
 def create_cargo_operation():
     data = request.get_json()
-    required = ["gate_entry_id", "operation_type", "start_datetime"]
+
+    # 🔹 Remove start_datetime from required
+    required = ["gate_entry_id", "operation_type"]
     missing = [f for f in required if not data.get(f)]
     if missing:
         return jsonify({"success": False, "message": f"Missing: {', '.join(missing)}"}), 400
 
     conn = get_db_connection()
     cursor = conn.cursor()
+
     try:
+        # 🔹 Insert with optional start/end
         cursor.execute("""
-            INSERT INTO cargo_operations (gate_entry_id, operation_type, start_datetime, end_datetime, compressor_no, remarks)
+            INSERT INTO cargo_operations 
+            (gate_entry_id, operation_type, start_datetime, end_datetime, compressor_no, remarks)
             VALUES (%s,%s,%s,%s,%s,%s)
         """, (
-            data["gate_entry_id"], data["operation_type"], data["start_datetime"],
-            data.get("end_datetime"), data.get("compressor_no"), data.get("remarks")
+            data["gate_entry_id"],
+            data["operation_type"],
+            data.get("start_datetime"),   # optional
+            data.get("end_datetime"),     # optional
+            data.get("compressor_no"),
+            data.get("remarks")
         ))
-        cursor.execute("UPDATE gate_entries SET status=%s WHERE id=%s", (data["operation_type"], data["gate_entry_id"]))
+
+        # 🔹 Update status properly (IMPORTANT FIX)
+        status_map = {
+            "UNLOADING": "UNLOADING",
+            "LOADING": "UNLOADING"  # or change if needed
+        }
+
+        cursor.execute("""
+            UPDATE gate_entries 
+            SET status=%s 
+            WHERE id=%s
+        """, (
+            status_map.get(data["operation_type"], "UNLOADING"),
+            data["gate_entry_id"]
+        ))
+
         conn.commit()
-        return jsonify({"success": True, "message": "Operation recorded"}), 201
+
+        return jsonify({
+            "success": True,
+            "message": "Operation created (start/end optional)"
+        }), 201
+
     except Exception as e:
         conn.rollback()
         return jsonify({"success": False, "message": str(e)}), 500
+
     finally:
         cursor.close()
         conn.close()
 
+def update_cargo_operation(operation_id):
+    data = request.get_json()
+
+    if not data:
+        return jsonify({"success": False, "message": "No data provided"}), 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        fields = []
+        values = []
+
+        if "start_datetime" in data:
+            fields.append("start_datetime=%s")
+            values.append(data["start_datetime"])
+
+        if "end_datetime" in data:
+            fields.append("end_datetime=%s")
+            values.append(data["end_datetime"])
+
+        if "compressor_no" in data:
+            fields.append("compressor_no=%s")
+            values.append(data["compressor_no"])
+
+        if "remarks" in data:
+            fields.append("remarks=%s")
+            values.append(data["remarks"])
+
+        if not fields:
+            return jsonify({"success": False, "message": "Nothing to update"}), 400
+
+        query = f"""
+            UPDATE cargo_operations 
+            SET {', '.join(fields)} 
+            WHERE id=%s
+        """
+
+        values.append(operation_id)
+
+        cursor.execute(query, tuple(values))
+
+        conn.commit()
+
+        return jsonify({
+            "success": True,
+            "message": "Operation updated"
+        })
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "message": str(e)}), 500
+
+    finally:
+        cursor.close()
+        conn.close()
 
 # ---------- WBOUT ----------
 def create_wbout():

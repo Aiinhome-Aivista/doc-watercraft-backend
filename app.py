@@ -8,7 +8,7 @@ from controllers.vessel_controller import (
 )
 from controllers.gate_controller import (
     get_gate_entries, create_gate_entry, gate_out,
-    create_wbin, create_cargo_operation, create_wbout, get_weighments
+    create_wbin, create_cargo_operation,update_cargo_operation,create_wbout, get_weighments,get_cargo_operation
 )
 
 app = Flask(__name__)
@@ -61,8 +61,14 @@ def route_get_weighments(gate_id): return get_weighments(gate_id)
 @app.route(API + '/wbin', methods=['POST'])
 def route_create_wbin(): return create_wbin()
 
+@app.route(API + '/cargo-operations/<int:operation_id>', methods=['GET'])
+def route_get_cargo_operation(operation_id):return get_cargo_operation(operation_id)
+
 @app.route(API + '/cargo-operations', methods=['POST'])
 def route_create_cargo_operation(): return create_cargo_operation()
+
+@app.route(API + '/cargo-operations/<int:operation_id>', methods=['PUT'])
+def route_update_cargo_operation(operation_id):return update_cargo_operation(operation_id)
 
 @app.route(API + '/wbout', methods=['POST'])
 def route_create_wbout(): return create_wbout()
