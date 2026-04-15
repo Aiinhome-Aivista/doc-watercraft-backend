@@ -67,7 +67,7 @@ def route_get_cargo_operation(operation_id):return get_cargo_operation(operation
 @app.route(API + '/cargo-operations', methods=['POST'])
 def route_create_cargo_operation(): return create_cargo_operation()
 
-@app.route(API + '/cargo-operations/<int:operation_id>', methods=['PUT'])
+@app.route(API + '/cargo-operations/<int:operation_id>', methods=['POST'])
 def route_update_cargo_operation(operation_id):return update_cargo_operation(operation_id)
 
 @app.route(API + '/wbout', methods=['POST'])
