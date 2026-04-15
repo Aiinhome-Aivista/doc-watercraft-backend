@@ -159,7 +159,7 @@ def create_cargo_operation():
             data["gate_entry_id"], data["operation_type"], data["start_datetime"],
             data.get("end_datetime"), data.get("compressor_no"), data.get("remarks")
         ))
-        cursor.execute("UPDATE gate_entries SET status='UNLOADING' WHERE id=%s", (data["gate_entry_id"],))
+        cursor.execute("UPDATE gate_entries SET status=%s WHERE id=%s", (data["operation_type"], data["gate_entry_id"]))
         conn.commit()
         return jsonify({"success": True, "message": "Operation recorded"}), 201
     except Exception as e:
