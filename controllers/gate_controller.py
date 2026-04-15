@@ -296,11 +296,14 @@ def update_cargo_operation(operation_id):
         return jsonify({"success": False, "message": "No data provided"}), 400
 
     conn = get_db_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(buffered=True)
 
     try:
         fields = []
         values = []
+
+        # Track if end_datetime is updated
+        end_updated = False
 
         if "start_datetime" in data:
             fields.append("start_datetime=%s")
@@ -309,6 +312,7 @@ def update_cargo_operation(operation_id):
         if "end_datetime" in data:
             fields.append("end_datetime=%s")
             values.append(data["end_datetime"])
+            end_updated = True 
 
         if "compressor_no" in data:
             fields.append("compressor_no=%s")
@@ -321,21 +325,33 @@ def update_cargo_operation(operation_id):
         if not fields:
             return jsonify({"success": False, "message": "Nothing to update"}), 400
 
+        # 🔹 Update cargo operation
         query = f"""
             UPDATE cargo_operations 
             SET {', '.join(fields)} 
             WHERE id=%s
         """
-
         values.append(operation_id)
 
         cursor.execute(query, tuple(values))
+
+        # 🔥 If end_datetime updated → change status
+        if end_updated:
+            cursor.execute("""
+                UPDATE gate_entries 
+                SET status='PENDING_WBOUT'
+                WHERE id = (
+                    SELECT gate_entry_id 
+                    FROM cargo_operations 
+                    WHERE id = %s
+                )
+            """, (operation_id,))
 
         conn.commit()
 
         return jsonify({
             "success": True,
-            "message": "Operation updated"
+            "message": "Operation updated successfully"
         })
 
     except Exception as e:
@@ -345,7 +361,6 @@ def update_cargo_operation(operation_id):
     finally:
         cursor.close()
         conn.close()
-
 # ---------- WBOUT ----------
 def create_wbout():
     data = request.get_json()
