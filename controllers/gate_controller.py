@@ -116,30 +116,75 @@ def create_wbin():
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute("SELECT status FROM gate_entries WHERE id = %s", (data["gate_entry_id"],))
+        # 🔹 Get gate entry + vessel direction
+        cursor.execute("""
+            SELECT ge.status, v.direction
+            FROM gate_entries ge
+            JOIN vessels v ON ge.vessel_id = v.id
+            WHERE ge.id = %s
+        """, (data["gate_entry_id"],))
+
         row = cursor.fetchone()
+
         if not row:
             return jsonify({"success": False, "message": "Gate entry not found"}), 404
-        if row[0] != "PENDING_WBIN":
-            return jsonify({"success": False, "message": f"Entry status is {row[0]}, not PENDING_WBIN"}), 400
 
+        status, direction = row
+
+        if status != "PENDING_WBIN":
+            return jsonify({
+                "success": False,
+                "message": f"Entry status is {status}, not PENDING_WBIN"
+            }), 400
+
+        # 🔥 Apply condition
+        gross_weight = None
+        tare_weight = None
+
+        if direction == "EXPORT":
+            gross_weight = data.get("gross_weight")
+            if not gross_weight:
+                return jsonify({"success": False, "message": "gross_weight required for EXPORT"}), 400
+
+        elif direction == "IMPORT":
+            tare_weight = data.get("tare_weight")
+            if not tare_weight:
+                return jsonify({"success": False, "message": "tare_weight required for IMPORT"}), 400
+
+        # 🔹 Insert WBIN
         cursor.execute("""
-            INSERT INTO wbin_records (gate_entry_id, weighment_slip_no, wbin_datetime, gross_weight, tare_weight)
+            INSERT INTO wbin_records 
+            (gate_entry_id, weighment_slip_no, wbin_datetime, gross_weight, tare_weight)
             VALUES (%s,%s,%s,%s,%s)
         """, (
-            data["gate_entry_id"], data["weighment_slip_no"], data["wbin_datetime"],
-            data.get("gross_weight"), data.get("tare_weight")
+            data["gate_entry_id"],
+            data["weighment_slip_no"],
+            data["wbin_datetime"],
+            gross_weight,
+            tare_weight
         ))
-        cursor.execute("UPDATE gate_entries SET status='WBIN_DONE' WHERE id=%s", (data["gate_entry_id"],))
+
+        # 🔹 Update status
+        cursor.execute("""
+            UPDATE gate_entries 
+            SET status='WBIN_DONE' 
+            WHERE id=%s
+        """, (data["gate_entry_id"],))
+
         conn.commit()
-        return jsonify({"success": True, "message": "WBIN recorded"}), 201
+
+        return jsonify({
+            "success": True,
+            "message": f"WBIN recorded for {direction}"
+        }), 201
+
     except Exception as e:
         conn.rollback()
         return jsonify({"success": False, "message": str(e)}), 500
+
     finally:
         cursor.close()
         conn.close()
-
 
 # ---------- Cargo Operation (Loading/Unloading) ----------
 def create_cargo_operation():
