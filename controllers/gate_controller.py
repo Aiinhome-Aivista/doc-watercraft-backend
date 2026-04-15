@@ -19,9 +19,11 @@ def get_gate_entries():
     cursor = conn.cursor()
     try:
         sql = """
-            SELECT ge.*, v.vessel_name, v.party_name, v.direction
+            SELECT ge.*, v.vessel_name, v.party_name, v.direction,co.compressor_no
             FROM gate_entries ge
             JOIN vessels v ON ge.vessel_id = v.id
+            LEFT JOIN cargo_operations co 
+            ON co.gate_entry_id = ge.id
             WHERE 1=1
         """
         params = []
