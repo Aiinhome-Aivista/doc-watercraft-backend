@@ -2,7 +2,7 @@ from flask import Flask
 from flask_cors import CORS
 from middleware.auth_middleware import token_required
 
-from controllers.auth_controller import (login,register,get_loggedin_user,get_all_users)
+from controllers.auth_controller import (login,register,get_loggedin_user,get_all_users,update_access_rights,get_access_rights)
 from controllers.vessel_controller import (
     get_vessels, get_vessel, create_vessel,
     berth_vessel, moor_vessel, survey_vessel, unberth_vessel,
@@ -37,6 +37,15 @@ def route_loggedin_user(): return get_loggedin_user()
 @app.route(API + '/users', methods=['GET'])
 @token_required
 def route_get_users(): return get_all_users()
+
+# ─── Access Rights Routes ───────────────────────────────────────
+@app.route(API + '/access-rights/<int:user_id>', methods=['POST'])
+@token_required
+def route_update_access_rights(user_id): return update_access_rights(user_id)
+
+@app.route(API + '/access-rights/<int:user_id>', methods=['GET'])
+@token_required
+def route_get_access_rights(user_id): return get_access_rights(user_id)
 
 # ─── Party Masters Routes ───────────────────────────────────────
 @app.route(API + '/partymasters', methods=['GET'])

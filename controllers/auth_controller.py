@@ -334,3 +334,103 @@ def get_all_users():
 
     finally:
         conn.close()
+
+
+def update_access_rights(user_id):
+    data = request.get_json()
+
+    if not data:
+        return jsonify({
+            "status": "error",
+            "message": "No data provided"
+        }), 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        import json
+
+        # 🔹 Convert dict → JSON string
+        access_json = json.dumps(data)
+
+        # 🔹 Check if record exists
+        cursor.execute("""
+            SELECT id FROM user_access_rights WHERE user_id=%s
+        """, (user_id,))
+        exists = cursor.fetchone()
+
+        if exists:
+            # 🔹 UPDATE
+            cursor.execute("""
+                UPDATE user_access_rights
+                SET access_rights=%s
+                WHERE user_id=%s
+            """, (access_json, user_id))
+        else:
+            # 🔹 INSERT (if not exists)
+            cursor.execute("""
+                INSERT INTO user_access_rights (user_id, access_rights)
+                VALUES (%s, %s)
+            """, (user_id, access_json))
+
+        conn.commit()
+
+        return jsonify({
+            "status": "success",
+            "message": "Access rights updated successfully",
+            "data": data
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
+
+    finally:
+        conn.close()     
+
+
+def get_access_rights(user_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute("""
+            SELECT access_rights 
+            FROM user_access_rights 
+            WHERE user_id=%s
+        """, (user_id,))
+
+        result = cursor.fetchone()
+
+        if not result:
+            return jsonify({
+                "status": "error",
+                "message": "No access rights found"
+            }), 404
+
+        access_rights = result[0]
+
+        # 🔹 Convert JSON string → dict if needed
+        import json
+        if isinstance(access_rights, str):
+            access_rights = json.loads(access_rights)
+
+        return jsonify({
+            "status": "success",
+            "data": {
+                "user_id": user_id,
+                "access_rights": access_rights
+            }
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
+
+    finally:
+        conn.close()           
