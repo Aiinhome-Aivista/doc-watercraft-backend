@@ -167,7 +167,6 @@ def update_partymaster(partymaster_id):
     finally:
         conn.close()
 
-
 def delete_partymaster(partymaster_id):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -184,7 +183,7 @@ def delete_partymaster(partymaster_id):
     except Exception as e:
         return jsonify({
             "status": "error",
-            "message": str(e)
+            "message": "Cannot delete this party because it is associated with existing vessels."
         }), 500
 
     finally:
