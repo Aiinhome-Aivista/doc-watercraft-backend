@@ -1,6 +1,8 @@
 from flask import Flask
 from flask_cors import CORS
+from middleware.auth_middleware import token_required
 
+from controllers.auth_controller import (login,register)
 from controllers.vessel_controller import (
     get_vessels, get_vessel, create_vessel,
     berth_vessel, moor_vessel, survey_vessel, unberth_vessel,
@@ -11,11 +13,22 @@ from controllers.gate_controller import (
     create_wbin, create_cargo_operation,update_cargo_operation,create_wbout, get_weighments,get_cargo_operation
 )
 from controllers.partymasters_controller import (get_partymaster, get_partymasters, create_partymaster, update_partymaster,delete_partymaster)
+import os
+
 
 app = Flask(__name__)
 CORS(app)
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
 
 API = "/api/v1"
+
+# ─── Public Routes ──────────────────────────────────────────────
+@app.route(API + '/login', methods=['POST'])
+def route_login(): return login()
+
+@app.route(API + '/register', methods=['POST'])
+def route_register():return register()
+
 # ─── Party Masters Routes ───────────────────────────────────────
 @app.route(API + '/partymasters', methods=['GET'])
 def route_get_partymasters(): return get_partymasters()
@@ -34,30 +47,39 @@ def route_delete_partymaster(partymaster_id):return delete_partymaster(partymast
 
 # ─── Vessel Routes ─────────────────────────────────────────────
 @app.route(API + '/vessels', methods=['GET'])
+@token_required
 def route_get_vessels(): return get_vessels()
 
 @app.route(API + '/vessels', methods=['POST'])
+@token_required
 def route_create_vessel(): return create_vessel()
 
 @app.route(API + '/vessels/<int:vessel_id>', methods=['GET'])
+@token_required
 def route_get_vessel(vessel_id): return get_vessel(vessel_id)
 
 @app.route(API + '/vessels/<int:vessel_id>/berth', methods=['POST'])
+@token_required
 def route_berth_vessel(vessel_id): return berth_vessel(vessel_id)
 
 @app.route(API + '/vessels/<int:vessel_id>/moor', methods=['POST'])
+@token_required
 def route_moor_vessel(vessel_id): return moor_vessel(vessel_id)
 
 @app.route(API + '/vessels/<int:vessel_id>/survey', methods=['POST'])
+@token_required
 def route_survey_vessel(vessel_id): return survey_vessel(vessel_id)
 
 @app.route(API + '/vessels/<int:vessel_id>/unberth', methods=['POST'])
+@token_required
 def route_unberth_vessel(vessel_id): return unberth_vessel(vessel_id)
 
 @app.route(API + '/vessels/<int:vessel_id>/billing', methods=['GET'])
+@token_required
 def route_vessel_billing(vessel_id): return get_vessel_billing(vessel_id)
 
 @app.route(API + '/mis/report', methods=['GET'])
+@token_required
 def route_mis_report(): return get_mis_report()
 
 # ─── Gate Entry Routes ──────────────────────────────────────────
