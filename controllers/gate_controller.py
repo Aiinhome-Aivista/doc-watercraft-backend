@@ -19,7 +19,7 @@ def get_gate_entries():
     cursor = conn.cursor()
     try:
         sql = """
-            SELECT ge.*, v.vessel_name, v.party_name, v.direction,co.compressor_no,co.id as cargo_operation_id
+            SELECT ge.*, v.vessel_name, v.party_id, v.direction,co.compressor_no,co.id as cargo_operation_id
             FROM gate_entries ge
             JOIN vessels v ON ge.vessel_id = v.id
             LEFT JOIN cargo_operations co 
