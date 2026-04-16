@@ -73,6 +73,8 @@ from database.db_connection import get_db_connection
 
 #     finally:
 #         conn.close()
+
+
 def login():
     data = request.get_json()
 
@@ -202,7 +204,6 @@ def register():
         conn.close()   
 
 
-
 def get_loggedin_user():
     auth_header = request.headers.get("Authorization")
 
@@ -273,3 +274,43 @@ def get_loggedin_user():
             "status": "error",
             "message": str(e)
         }), 500
+
+
+def get_all_users():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute("""
+            SELECT id, username, role, full_name, mobile, email, is_active
+            FROM users
+        """)
+
+        users = cursor.fetchall()
+
+        # Convert to list of dict
+        user_list = []
+        for user in users:
+            user_list.append({
+                "id": user[0],
+                "username": user[1],
+                "role": user[2],
+                "full_name": user[3],
+                "mobile": user[4],
+                "email": user[5],
+                "is_active": user[6]
+            })
+
+        return jsonify({
+            "status": "success",
+            "data": user_list
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
+
+    finally:
+        conn.close()
