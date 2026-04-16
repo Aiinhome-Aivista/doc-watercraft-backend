@@ -29,6 +29,7 @@ def route_login(): return login()
 @app.route(API + '/register', methods=['POST'])
 def route_register():return register()
 
+# ─── User Routes ────────────────────────────────────────────────
 @app.route(API +'/logged-in-user', methods=['GET'])
 @token_required
 def route_loggedin_user(): return get_loggedin_user()
