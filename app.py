@@ -2,7 +2,7 @@ from flask import Flask
 from flask_cors import CORS
 from middleware.auth_middleware import token_required
 
-from controllers.auth_controller import (login,register)
+from controllers.auth_controller import (login,register,get_loggedin_user)
 from controllers.vessel_controller import (
     get_vessels, get_vessel, create_vessel,
     berth_vessel, moor_vessel, survey_vessel, unberth_vessel,
@@ -28,6 +28,10 @@ def route_login(): return login()
 
 @app.route(API + '/register', methods=['POST'])
 def route_register():return register()
+
+@app.route(API +'/logged-in-user', methods=['GET'])
+@token_required
+def route_loggedin_user(): return get_loggedin_user()
 
 # ─── Party Masters Routes ───────────────────────────────────────
 @app.route(API + '/partymasters', methods=['GET'])

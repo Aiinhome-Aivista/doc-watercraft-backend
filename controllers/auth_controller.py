@@ -199,4 +199,77 @@ def register():
         }), 500
 
     finally:
-        conn.close()        
+        conn.close()   
+
+
+
+def get_loggedin_user():
+    auth_header = request.headers.get("Authorization")
+
+    if not auth_header:
+        return jsonify({
+            "status": "error",
+            "message": "Token missing"
+        }), 401
+
+    try:
+        # 🔐 Extract token (Bearer TOKEN)
+        token = auth_header.split(" ")[1]
+
+        # 🔓 Decode token
+        decoded = jwt.decode(
+            token,
+            current_app.config['SECRET_KEY'],
+            algorithms=["HS256"]
+        )
+
+        user_id = decoded["user_id"]
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # 🔹 Fetch user from DB
+        cursor.execute("""
+            SELECT id, username, role, full_name, mobile, email, is_active
+            FROM users
+            WHERE id=%s
+        """, (user_id,))
+
+        user = cursor.fetchone()
+
+        if not user:
+            return jsonify({
+                "status": "error",
+                "message": "User not found"
+            }), 404
+
+        return jsonify({
+            "status": "success",
+            "data": {
+                "id": user[0],
+                "username": user[1],
+                "role": user[2],
+                "full_name": user[3],
+                "mobile": user[4],
+                "email": user[5],
+                "is_active": user[6]
+            }
+        }), 200
+
+    except jwt.ExpiredSignatureError:
+        return jsonify({
+            "status": "error",
+            "message": "Token expired"
+        }), 401
+
+    except jwt.InvalidTokenError:
+        return jsonify({
+            "status": "error",
+            "message": "Invalid token"
+        }), 401
+
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
