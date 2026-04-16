@@ -48,7 +48,7 @@ def get_vessel(vessel_id):
 # ---------- CREATE vessel ----------
 def create_vessel():
     data = request.get_json()
-    required = ["vessel_name", "party_name", "cargo_type", "quantity", "direction", "expected_date"]
+    required = ["vessel_name", "party_id", "cargo_type", "quantity", "direction", "expected_date"]
     missing = [f for f in required if not data.get(f)]
     if missing:
         return jsonify({"success": False, "message": f"Missing fields: {', '.join(missing)}"}), 400
@@ -57,10 +57,10 @@ def create_vessel():
     cursor = conn.cursor()
     try:
         cursor.execute("""
-            INSERT INTO vessels (vessel_name, party_name, cargo_type, quantity, direction, expected_date)
+            INSERT INTO vessels (vessel_name, party_id, cargo_type, quantity, direction, expected_date)
             VALUES (%s, %s, %s, %s, %s, %s)
         """, (
-            data["vessel_name"], data["party_name"], data["cargo_type"],
+            data["vessel_name"], data["party_id"], data["cargo_type"],
             data["quantity"], data["direction"], data["expected_date"]
         ))
         conn.commit()
