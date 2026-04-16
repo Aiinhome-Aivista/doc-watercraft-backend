@@ -197,7 +197,7 @@ def register():
             VALUES (%s, %s)
         """, (
             user_id,
-            None   # or '{}' if you prefer empty JSON
+            '{}'   
         ))
 
         conn.commit()
