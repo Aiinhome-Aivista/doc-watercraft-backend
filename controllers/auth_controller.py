@@ -143,7 +143,7 @@ def register():
     data = request.get_json()
 
     # 🔹 Basic validation
-    if not data or not data.get("username") or not data.get("password") or not data.get("role"):
+    if not data or not data.get("password") or not data.get("email"):
         return jsonify({
             "status": "error",
             "message": "username, password and role are required"
@@ -169,9 +169,9 @@ def register():
         """
 
         cursor.execute(query, (
-            data.get("role"),
+            "user",
             data.get("username"),
-            data.get("password"),   # ⚠️ plain text (as per your requirement)
+            data.get("password"),   
             data.get("full_name"),
             data.get("mobile"),
             data.get("email"),
@@ -187,7 +187,8 @@ def register():
             "data": {
                 "id": user_id,
                 "username": data.get("username"),
-                "role": data.get("role")
+                "email": data.get("email"),
+                "full_name": data.get("full_name")
             }
         }), 201
 

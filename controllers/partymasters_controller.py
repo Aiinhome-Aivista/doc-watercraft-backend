@@ -167,6 +167,7 @@ def update_partymaster(partymaster_id):
     finally:
         conn.close()
 
+
 def delete_partymaster(partymaster_id):
     conn = get_db_connection()
     cursor = conn.cursor()
