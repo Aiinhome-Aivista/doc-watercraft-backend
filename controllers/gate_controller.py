@@ -71,7 +71,7 @@ def create_gate_entry():
         conn.commit()
         new_id = cursor.lastrowid
         cursor.execute("""
-            SELECT ge.*, v.vessel_name, v.party_name, v.direction
+            SELECT ge.*, v.vessel_name, v.party_id, v.direction
             FROM gate_entries ge JOIN vessels v ON ge.vessel_id = v.id
             WHERE ge.id = %s
         """, (new_id,))
@@ -361,6 +361,7 @@ def update_cargo_operation(operation_id):
     finally:
         cursor.close()
         conn.close()
+        
 # ---------- WBOUT ----------
 def create_wbout():
     data = request.get_json()

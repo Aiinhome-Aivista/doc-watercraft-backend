@@ -10,11 +10,27 @@ from controllers.gate_controller import (
     get_gate_entries, create_gate_entry, gate_out,
     create_wbin, create_cargo_operation,update_cargo_operation,create_wbout, get_weighments,get_cargo_operation
 )
+from controllers.partymasters_controller import (get_partymaster, get_partymasters, create_partymaster, update_partymaster,delete_partymaster)
 
 app = Flask(__name__)
 CORS(app)
 
 API = "/api/v1"
+# ─── Party Masters Routes ───────────────────────────────────────
+@app.route(API + '/partymasters', methods=['GET'])
+def route_get_partymasters(): return get_partymasters()
+
+@app.route(API + '/partymasters/<int:partymaster_id>', methods=['GET'])
+def route_get_partymaster(partymaster_id):return get_partymaster(partymaster_id)
+
+@app.route(API + '/partymasters', methods=['POST'])
+def route_create_partymaster(): return create_partymaster()
+
+@app.route(API + '/partymasters/<int:partymaster_id>', methods=['POST'])
+def route_update_partymaster(partymaster_id):return update_partymaster(partymaster_id)
+
+@app.route(API + '/partymasters/<int:partymaster_id>', methods=['DELETE'])
+def route_delete_partymaster(partymaster_id):return delete_partymaster(partymaster_id)
 
 # ─── Vessel Routes ─────────────────────────────────────────────
 @app.route(API + '/vessels', methods=['GET'])
