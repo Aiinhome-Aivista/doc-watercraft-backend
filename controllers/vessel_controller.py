@@ -14,16 +14,39 @@ def _vessel_row(row, keys):
 # ---------- GET all vessels ----------
 def get_vessels():
     status_filter = request.args.get("status")
+
     conn = get_db_connection()
     cursor = conn.cursor()
+
     try:
         if status_filter:
-            cursor.execute("SELECT * FROM vessels WHERE status = %s ORDER BY created_at DESC", (status_filter,))
+            cursor.execute("""
+                SELECT 
+                    v.*,
+                    p.party_name
+                FROM vessels v
+                LEFT JOIN party_masters p ON v.party_id = p.id
+                WHERE v.status = %s
+                ORDER BY v.created_at DESC
+            """, (status_filter,))
         else:
-            cursor.execute("SELECT * FROM vessels ORDER BY created_at DESC")
+            cursor.execute("""
+                SELECT 
+                    v.*,
+                    p.party_name
+                FROM vessels v
+                LEFT JOIN party_masters p ON v.party_id = p.id
+                ORDER BY v.created_at DESC
+            """)
+
         cols = [c[0] for c in cursor.description]
         rows = [_vessel_row(r, cols) for r in cursor.fetchall()]
-        return jsonify({"success": True, "data": rows}), 200
+
+        return jsonify({
+            "success": True,
+            "data": rows
+        }), 200
+
     finally:
         cursor.close()
         conn.close()
@@ -39,8 +62,8 @@ def get_vessel(vessel_id):
             SELECT 
                 v.*,
                 p.party_name AS party_name
-            FROM vessels v
-            LEFT JOIN party_masters p ON v.party_id = p.id
+            FROM party_masters p
+            JOIN vessels v ON v.party_id = p.id
             WHERE v.id = %s
         """, (vessel_id,))
 
