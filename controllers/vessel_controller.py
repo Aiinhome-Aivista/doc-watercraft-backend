@@ -382,30 +382,30 @@ def update_rate(vessel_id, rate_id):
         conn.close()
 
 # ---------- GET billing for vessel ----------
-def get_vessel_billing(vessel_id):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    try:
-        cursor.execute("SELECT * FROM v_vessel_billing WHERE vessel_id = %s", (vessel_id,))
-        cols = [c[0] for c in cursor.description]
-        row = cursor.fetchone()
-        if not row:
-            return jsonify({"success": False, "message": "No billing data found"}), 404
-        return jsonify({"success": True, "data": _vessel_row(row, cols)}), 200
-    finally:
-        cursor.close()
-        conn.close()
+# def get_vessel_billing(vessel_id):
+#     conn = get_db_connection()
+#     cursor = conn.cursor()
+#     try:
+#         cursor.execute("SELECT * FROM v_vessel_billing WHERE vessel_id = %s", (vessel_id,))
+#         cols = [c[0] for c in cursor.description]
+#         row = cursor.fetchone()
+#         if not row:
+#             return jsonify({"success": False, "message": "No billing data found"}), 404
+#         return jsonify({"success": True, "data": _vessel_row(row, cols)}), 200
+#     finally:
+#         cursor.close()
+#         conn.close()
 
 
 # ---------- GET all billing (MIS report) ----------
-def get_mis_report():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    try:
-        cursor.execute("SELECT * FROM v_vessel_billing ORDER BY vessel_id DESC")
-        cols = [c[0] for c in cursor.description]
-        rows = [_vessel_row(r, cols) for r in cursor.fetchall()]
-        return jsonify({"success": True, "data": rows}), 200
-    finally:
-        cursor.close()
-        conn.close()
+# def get_mis_report():
+#     conn = get_db_connection()
+#     cursor = conn.cursor()
+#     try:
+#         cursor.execute("SELECT * FROM v_vessel_billing ORDER BY vessel_id DESC")
+#         cols = [c[0] for c in cursor.description]
+#         rows = [_vessel_row(r, cols) for r in cursor.fetchall()]
+#         return jsonify({"success": True, "data": rows}), 200
+#     finally:
+#         cursor.close()
+#         conn.close()

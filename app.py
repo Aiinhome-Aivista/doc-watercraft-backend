@@ -13,6 +13,8 @@ from controllers.gate_controller import (
     create_wbin, create_cargo_operation,update_cargo_operation,create_wbout, get_weighments,get_cargo_operation
 )
 from controllers.partymasters_controller import (get_partymaster, get_partymasters, create_partymaster, update_partymaster,delete_partymaster)
+
+from controllers.billing_controller import (get_vessels_for_billing)
 import os
 
 
@@ -102,13 +104,17 @@ def route_unberth_vessel(vessel_id): return unberth_vessel(vessel_id)
 @token_required
 def route_rates_by_vessel(vessel_id):return get_rates_by_vessel(vessel_id)
 
-@app.route(API + '/rates/<int:vessel_id>/<int:rate_id>', methods=['POST'])
+@app.route(API + "/billing/vessels", methods=["POST"])
 @token_required
-def route_vessel_billing(vessel_id, rate_id): return update_rate(vessel_id, rate_id)
+def route_billing_vessels():return get_vessels_for_billing()
 
-@app.route(API + '/mis/report', methods=['GET'])
-@token_required
-def route_mis_report(): return get_mis_report()
+# @app.route(API + '/rates/<int:vessel_id>/<int:rate_id>', methods=['POST'])
+# @token_required
+# def route_vessel_billing(vessel_id, rate_id): return update_rate(vessel_id, rate_id)
+
+# @app.route(API + '/mis/report', methods=['GET'])
+# @token_required
+# def route_mis_report(): return get_mis_report()
 
 # ─── Gate Entry Routes ──────────────────────────────────────────
 @app.route(API + '/gate-entries', methods=['GET'])
