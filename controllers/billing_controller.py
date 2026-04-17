@@ -161,12 +161,12 @@ def generate_bill():
     data = request.get_json()
 
     party_id = data.get("party_id")
-    vessel_ids = data.get("vessel_ids")
+    vessel_id = data.get("vessel_id")  
     start_date = data.get("period_start")
     end_date = data.get("period_end")
 
-    if not party_id or not vessel_ids:
-        return jsonify({"success": False, "message": "Missing required fields"}), 400
+    if not party_id or not vessel_id:
+        return jsonify({"success": False, "message": "party_id and vessel_id required"}), 400
 
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -176,28 +176,28 @@ def generate_bill():
         total_gst = Decimal(0)
         bill_details = []
 
-        for vessel_id in vessel_ids:
-            context = build_context(vessel_id)
-            rates = fetch_rates(vessel_id)
 
-            for r in rates:
-                amount = calculate_amount(r, context)
+        context = build_context(vessel_id)
+        rates = fetch_rates(vessel_id)
 
-                gst_rate = Decimal(r["gst_rate"])
-                gst = (amount * gst_rate) / Decimal(100)
+        for r in rates:
+            amount = calculate_amount(r, context)
 
-                total_base += amount
-                total_gst += gst
+            gst_rate = Decimal(r["gst_rate"])
+            gst = (amount * gst_rate) / Decimal(100)
 
-                bill_details.append({
-                    "vessel_id": vessel_id,
-                    "activity": r["activity"],
-                    "qty": 1,
-                    "rate": float(r["rate"]),
-                    "amount": float(amount),
-                    "gst_rate": float(r["gst_rate"]),
-                    "gst_amount": float(gst)
-                })
+            total_base += amount
+            total_gst += gst
+
+            bill_details.append({
+                "vessel_id": vessel_id,
+                "activity": r["activity"],
+                "qty": 1,
+                "rate": float(r["rate"]),
+                "amount": float(amount),
+                "gst_rate": float(r["gst_rate"]),
+                "gst_amount": float(gst)
+            })
 
         total_bill_value = total_base + total_gst
 
@@ -213,7 +213,7 @@ def generate_bill():
             start_date,
             end_date,
             float(total_base),
-            0, 0, float(total_gst),  # simple IGST (can split later)
+            0, 0, float(total_gst),
             float(total_bill_value)
         ))
 
@@ -238,46 +238,27 @@ def generate_bill():
 
         conn.commit()
 
-        # ===============================
-        # 🔹 FETCH SAVED BILL DATA
-        # ===============================
-
-        # 1️⃣ Get bill_main
-        cursor.execute("""
-            SELECT *
-            FROM bill_main
-            WHERE id = %s
-        """, (bill_main_id,))
-
+        # 🔹 Fetch bill_main
+        cursor.execute("SELECT * FROM bill_main WHERE id=%s", (bill_main_id,))
         cols_main = [c[0] for c in cursor.description]
         bill_main_row = dict(zip(cols_main, cursor.fetchone()))
 
-        # 2️⃣ Get bill_details
-        cursor.execute("""
-            SELECT *
-            FROM bill_details
-            WHERE bill_main_id = %s
-        """, (bill_main_id,))
-
+        # 🔹 Fetch bill_details
+        cursor.execute("SELECT * FROM bill_details WHERE bill_main_id=%s", (bill_main_id,))
         cols_details = [c[0] for c in cursor.description]
-        details_rows = []
 
+        details = []
         for r in cursor.fetchall():
             row = dict(zip(cols_details, r))
-
-            # Convert Decimal to float
             for k, v in row.items():
                 if isinstance(v, Decimal):
                     row[k] = float(v)
+            details.append(row)
 
-            details_rows.append(row)
-
-
-        # 3️⃣ Final Response
         return jsonify({
             "success": True,
             "bill": bill_main_row,
-            "details": details_rows
+            "details": details
         })
 
     except Exception as e:
