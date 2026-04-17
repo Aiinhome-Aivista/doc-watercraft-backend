@@ -6,7 +6,7 @@ from controllers.auth_controller import (login,register,get_loggedin_user,get_al
 from controllers.vessel_controller import (
     get_vessels, get_vessel, create_vessel,
     berth_vessel, moor_vessel, survey_vessel, unberth_vessel,
-    get_vessel_billing, get_mis_report
+    get_vessel_billing, get_mis_report,get_rates_by_vessel
 )
 from controllers.gate_controller import (
     get_gate_entries, create_gate_entry, gate_out,
@@ -96,6 +96,11 @@ def route_survey_vessel(vessel_id): return survey_vessel(vessel_id)
 @app.route(API + '/vessels/<int:vessel_id>/unberth', methods=['POST'])
 @token_required
 def route_unberth_vessel(vessel_id): return unberth_vessel(vessel_id)
+
+# Billing & MIS Routes
+@app.route(API + '/rates/<int:vessel_id>', methods=['GET'])
+@token_required
+def route_rates_by_vessel(vessel_id):return get_rates_by_vessel(vessel_id)
 
 @app.route(API + '/vessels/<int:vessel_id>/billing', methods=['GET'])
 @token_required

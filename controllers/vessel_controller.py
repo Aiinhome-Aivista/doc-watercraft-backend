@@ -46,8 +46,38 @@ def get_vessel(vessel_id):
 
 
 # ---------- CREATE vessel ----------
+# def create_vessel():
+#     data = request.get_json()
+#     required = ["vessel_name", "party_id", "cargo_type", "quantity", "direction", "expected_date"]
+#     missing = [f for f in required if not data.get(f)]
+#     if missing:
+#         return jsonify({"success": False, "message": f"Missing fields: {', '.join(missing)}"}), 400
+
+#     conn = get_db_connection()
+#     cursor = conn.cursor()
+#     try:
+#         cursor.execute("""
+#             INSERT INTO vessels (vessel_name, party_id, cargo_type, quantity, direction, expected_date)
+#             VALUES (%s, %s, %s, %s, %s, %s)
+#         """, (
+#             data["vessel_name"], data["party_id"], data["cargo_type"],
+#             data["quantity"], data["direction"], data["expected_date"]
+#         ))
+#         conn.commit()
+#         new_id = cursor.lastrowid
+#         cursor.execute("SELECT * FROM vessels WHERE id = %s", (new_id,))
+#         cols = [c[0] for c in cursor.description]
+#         row = cursor.fetchone()
+#         return jsonify({"success": True, "data": _vessel_row(row, cols), "message": "Vessel created"}), 201
+#     except Exception as e:
+#         conn.rollback()
+#         return jsonify({"success": False, "message": str(e)}), 500
+#     finally:
+#         cursor.close()
+#         conn.close()
 def create_vessel():
     data = request.get_json()
+
     required = ["vessel_name", "party_id", "cargo_type", "quantity", "direction", "expected_date"]
     missing = [f for f in required if not data.get(f)]
     if missing:
@@ -55,23 +85,58 @@ def create_vessel():
 
     conn = get_db_connection()
     cursor = conn.cursor()
+
     try:
+        # 1️⃣ Insert Vessel
         cursor.execute("""
             INSERT INTO vessels (vessel_name, party_id, cargo_type, quantity, direction, expected_date)
             VALUES (%s, %s, %s, %s, %s, %s)
         """, (
-            data["vessel_name"], data["party_id"], data["cargo_type"],
-            data["quantity"], data["direction"], data["expected_date"]
+            data["vessel_name"],
+            data["party_id"],
+            data["cargo_type"],
+            data["quantity"],
+            data["direction"],
+            data["expected_date"]
         ))
+
+        vessel_id = cursor.lastrowid
+
+        # 2️⃣ Insert Rates from Payload
+        rates = data.get("rates", [])
+
+        for r in rates:
+            cursor.execute("""
+                INSERT INTO rate_master
+                (vessel_id, activity, formula, rate, gst_rate, min_qty, max_qty, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
+            """, (
+                vessel_id,
+                r.get("activity"),
+                r.get("formula"),
+                r.get("rate"),
+                r.get("gst_rate"),
+                r.get("min_qty"),
+                r.get("max_qty")
+            ))
+
         conn.commit()
-        new_id = cursor.lastrowid
-        cursor.execute("SELECT * FROM vessels WHERE id = %s", (new_id,))
+
+        # 3️⃣ Return Data
+        cursor.execute("SELECT * FROM vessels WHERE id = %s", (vessel_id,))
         cols = [c[0] for c in cursor.description]
         row = cursor.fetchone()
-        return jsonify({"success": True, "data": _vessel_row(row, cols), "message": "Vessel created"}), 201
+
+        return jsonify({
+            "success": True,
+            "data": _vessel_row(row, cols),
+            "message": "Vessel + rates saved"
+        }), 201
+
     except Exception as e:
         conn.rollback()
         return jsonify({"success": False, "message": str(e)}), 500
+
     finally:
         cursor.close()
         conn.close()
@@ -199,6 +264,44 @@ def unberth_vessel(vessel_id):
         cursor.close()
         conn.close()
 
+
+# ---------- Rate Master -----------------
+def get_rates_by_vessel(vessel_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute("""
+            SELECT id, vessel_id, activity, formula, rate, gst_rate, min_qty, max_qty, created_at
+            FROM rate_master
+            WHERE vessel_id = %s
+        """, (vessel_id,))
+
+        cols = [c[0] for c in cursor.description]
+        rows = cursor.fetchall()
+
+        if not rows:
+            return jsonify({
+                "success": False,
+                "message": "No rates found for this vessel"
+            }), 404
+
+        data = [dict(zip(cols, r)) for r in rows]
+
+        return jsonify({
+            "success": True,
+            "data": data
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": str(e)
+        }), 500
+
+    finally:
+        cursor.close()
+        conn.close()
 
 # ---------- GET billing for vessel ----------
 def get_vessel_billing(vessel_id):
