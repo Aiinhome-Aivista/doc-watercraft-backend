@@ -1,14 +1,9 @@
 from flask import request, jsonify
 from database.db_connection import get_db_connection
 from datetime import datetime
+from decimal import Decimal
+import math
 
-
-def _row(row, keys):
-    d = dict(zip(keys, row))
-    for k, v in d.items():
-        if isinstance(v, datetime):
-            d[k] = v.strftime("%Y-%m-%d %H:%M:%S")
-    return d
 
 # ===============================
 # 🔹 BUILD CONTEXT FROM DB
@@ -20,7 +15,6 @@ def build_context(vessel_id):
     context = {}
 
     try:
-        # Vessel
         cursor.execute("SELECT * FROM vessels WHERE id=%s", (vessel_id,))
         cols = [c[0] for c in cursor.description]
         vessel = dict(zip(cols, cursor.fetchone()))
@@ -33,7 +27,7 @@ def build_context(vessel_id):
 
         # Gatein Count
         cursor.execute("SELECT COUNT(*) FROM gate_entries WHERE vessel_id=%s", (vessel_id,))
-        context["gatein_count"] = cursor.fetchone()[0]
+        context["gatein_count"] = cursor.fetchone()[0] or 0
 
         # WBIN Count
         cursor.execute("""
@@ -41,9 +35,9 @@ def build_context(vessel_id):
             JOIN gate_entries g ON co.gate_entry_id = g.id
             WHERE g.vessel_id=%s AND co.operation_type='WBIN'
         """, (vessel_id,))
-        context["wbin_count"] = cursor.fetchone()[0]
+        context["wbin_count"] = cursor.fetchone()[0] or 0
 
-        # Vehicles for Parking
+        # Vehicles
         cursor.execute("""
             SELECT gate_in_datetime, gate_out_datetime
             FROM gate_entries
@@ -93,44 +87,62 @@ def fetch_rates(vessel_id):
 # ===============================
 def calculate_amount(row, context):
     formula = row["formula"]
-    rate = float(row["rate"])
+    rate = Decimal(row["rate"])
 
+    # ---------------- Logic 1 ----------------
     if formula == "Logic1":
-        return context["survey_qty"] * rate
+        return Decimal(context["survey_qty"]) * rate
 
+    # ---------------- Logic 2 ----------------
     elif formula == "Logic2":
-        return context["gatein_count"] * rate
+        return Decimal(context["gatein_count"]) * rate
 
+    # ---------------- Logic 3 (Berthing) ----------------
     elif formula == "Logic3":
         start = context["berthing_time"]
         end = context["unberthing_time"]
 
-        hours = (end - start).total_seconds() / 3600
-        days = hours / 24
-        return days * rate
+        if not start or not end:
+            return Decimal(0)
 
+        hours = Decimal((end - start).total_seconds()) / Decimal(3600)
+        days = math.ceil(hours / Decimal(24))   # rounded
+
+        return Decimal(days) * rate
+
+    # ---------------- Logic 4 (Mooring) ----------------
     elif formula == "Logic4":
         start = context["mooring_start"]
         end = context["mooring_end"]
 
-        hours = (end - start).total_seconds() / 3600
-        days = math.ceil(hours / 24)
-        return days * rate
+        if not start or not end:
+            return Decimal(0)
 
+        hours = Decimal((end - start).total_seconds()) / Decimal(3600)
+        days = math.ceil(hours / Decimal(24))
+
+        return Decimal(days) * rate
+
+    # ---------------- Logic 6 ----------------
     elif formula == "Logic6":
-        return context["wbin_count"] * rate
+        return Decimal(context["wbin_count"]) * rate
 
+    # ---------------- Logic 7 (Parking) ----------------
     elif formula == "Logic7":
-        total_days = 0
+        total_days = Decimal(0)
+
         for v in context["vehicles"]:
-            hrs = (v["gateout"] - v["gatein"]).total_seconds() / 3600
-            charge = max(0, hrs - 24)
-            days = math.ceil(charge / 24)
-            total_days += days
+            if not v["gatein"] or not v["gateout"]:
+                continue
+
+            hrs = Decimal((v["gateout"] - v["gatein"]).total_seconds()) / Decimal(3600)
+            charge = max(Decimal(0), hrs - Decimal(24))
+            days = math.ceil(charge / Decimal(24))
+            total_days += Decimal(days)
 
         return total_days * rate
 
-    return 0
+    return Decimal(0)
 
 
 # ===============================
@@ -151,7 +163,8 @@ def generate_bill():
     cursor = conn.cursor()
 
     try:
-        total_base = 0
+        total_base = Decimal(0)
+        total_gst = Decimal(0)
         bill_details = []
 
         for vessel_id in vessel_ids:
@@ -160,38 +173,44 @@ def generate_bill():
 
             for r in rates:
                 amount = calculate_amount(r, context)
-                gst = amount * float(r["gst_rate"]) / 100
+
+                gst_rate = Decimal(r["gst_rate"])
+                gst = (amount * gst_rate) / Decimal(100)
 
                 total_base += amount
+                total_gst += gst
 
                 bill_details.append({
                     "vessel_id": vessel_id,
                     "activity": r["activity"],
                     "qty": 1,
-                    "rate": r["rate"],
-                    "amount": amount,
-                    "gst_rate": r["gst_rate"],
-                    "gst_amount": gst
+                    "rate": float(r["rate"]),
+                    "amount": float(amount),
+                    "gst_rate": float(r["gst_rate"]),
+                    "gst_amount": float(gst)
                 })
 
-        # Insert bill_main
+        total_bill_value = total_base + total_gst
+
+        # 🔹 Insert bill_main
         cursor.execute("""
             INSERT INTO bill_main
             (voucher_number, bill_date, party_id, period_start, period_end,
-             bill_base_value, total_bill_value, created_at)
-            VALUES (%s, CURDATE(), %s, %s, %s, %s, %s, NOW())
+             bill_base_value, cgst, sgst, igst, total_bill_value, created_at)
+            VALUES (%s, CURDATE(), %s, %s, %s, %s, %s, %s, %s, %s, NOW())
         """, (
             f"BILL-{datetime.now().timestamp()}",
             party_id,
             start_date,
             end_date,
-            total_base,
-            total_base
+            float(total_base),
+            0, 0, float(total_gst),  # simple IGST (can split later)
+            float(total_bill_value)
         ))
 
         bill_main_id = cursor.lastrowid
 
-        # Insert bill_details
+        # 🔹 Insert bill_details
         for d in bill_details:
             cursor.execute("""
                 INSERT INTO bill_details
@@ -201,11 +220,11 @@ def generate_bill():
                 bill_main_id,
                 d["vessel_id"],
                 d["activity"],
-                d["qty"],
-                d["rate"],
-                d["amount"],
-                d["gst_rate"],
-                d["gst_amount"]
+                float(d["qty"]),
+                float(d["rate"]),
+                float(d["amount"]),
+                float(d["gst_rate"]),
+                float(d["gst_amount"])
             ))
 
         conn.commit()
@@ -213,7 +232,9 @@ def generate_bill():
         return jsonify({
             "success": True,
             "bill_id": bill_main_id,
-            "total": total_base
+            "base": float(total_base),
+            "gst": float(total_gst),
+            "total": float(total_bill_value)
         })
 
     except Exception as e:
@@ -223,7 +244,6 @@ def generate_bill():
     finally:
         cursor.close()
         conn.close()
-
 
 def get_vessels_for_billing():
     data = request.get_json()
