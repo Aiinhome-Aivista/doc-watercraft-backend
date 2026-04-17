@@ -6,7 +6,7 @@ from controllers.auth_controller import (login,register,get_loggedin_user,get_al
 from controllers.vessel_controller import (
     get_vessels, get_vessel, create_vessel,
     berth_vessel, moor_vessel, survey_vessel, unberth_vessel,
-    get_vessel_billing, get_mis_report,get_rates_by_vessel
+    get_vessel_billing, get_mis_report,get_rates_by_vessel,update_rate
 )
 from controllers.gate_controller import (
     get_gate_entries, create_gate_entry, gate_out,
@@ -102,9 +102,9 @@ def route_unberth_vessel(vessel_id): return unberth_vessel(vessel_id)
 @token_required
 def route_rates_by_vessel(vessel_id):return get_rates_by_vessel(vessel_id)
 
-@app.route(API + '/vessels/<int:vessel_id>/billing', methods=['GET'])
+@app.route(API + '/rates/<int:vessel_id>/<int:rate_id>', methods=['POST'])
 @token_required
-def route_vessel_billing(vessel_id): return get_vessel_billing(vessel_id)
+def route_vessel_billing(vessel_id, rate_id): return update_rate(vessel_id, rate_id)
 
 @app.route(API + '/mis/report', methods=['GET'])
 @token_required

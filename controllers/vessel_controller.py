@@ -303,6 +303,84 @@ def get_rates_by_vessel(vessel_id):
         cursor.close()
         conn.close()
 
+
+def update_rate(vessel_id, rate_id):
+    data = request.get_json()
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        # 1️⃣ Check if record exists
+        cursor.execute("""
+            SELECT id FROM rate_master 
+            WHERE id = %s AND vessel_id = %s
+        """, (rate_id, vessel_id))
+
+        if not cursor.fetchone():
+            return jsonify({
+                "success": False,
+                "message": "Rate not found for this vessel"
+            }), 404
+
+        # 2️⃣ Build dynamic update query
+        fields = []
+        values = []
+
+        allowed_fields = [
+            "activity", "formula", "rate",
+            "gst_rate", "min_qty", "max_qty"
+        ]
+
+        for field in allowed_fields:
+            if field in data:
+                fields.append(f"{field} = %s")
+                values.append(data[field])
+
+        if not fields:
+            return jsonify({
+                "success": False,
+                "message": "No fields to update"
+            }), 400
+
+        values.append(rate_id)
+        values.append(vessel_id)
+
+        query = f"""
+            UPDATE rate_master
+            SET {', '.join(fields)}
+            WHERE id = %s AND vessel_id = %s
+        """
+
+        cursor.execute(query, tuple(values))
+        conn.commit()
+
+        # 3️⃣ Return updated row
+        cursor.execute("""
+            SELECT * FROM rate_master
+            WHERE id = %s AND vessel_id = %s
+        """, (rate_id, vessel_id))
+
+        cols = [c[0] for c in cursor.description]
+        updated = dict(zip(cols, cursor.fetchone()))
+
+        return jsonify({
+            "success": True,
+            "data": updated,
+            "message": "Rate updated successfully"
+        }), 200
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({
+            "success": False,
+            "message": str(e)
+        }), 500
+
+    finally:
+        cursor.close()
+        conn.close()
+
 # ---------- GET billing for vessel ----------
 def get_vessel_billing(vessel_id):
     conn = get_db_connection()
