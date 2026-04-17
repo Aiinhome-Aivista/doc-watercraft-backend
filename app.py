@@ -14,7 +14,7 @@ from controllers.gate_controller import (
 )
 from controllers.partymasters_controller import (get_partymaster, get_partymasters, create_partymaster, update_partymaster,delete_partymaster)
 
-from controllers.billing_controller import (get_vessels_for_billing,)
+from controllers.billing_controller import (get_vessels_for_billing,generate_bill)
 import os
 
 
@@ -107,6 +107,10 @@ def route_rates_by_vessel(vessel_id):return get_rates_by_vessel(vessel_id)
 @app.route(API + "/billing/vessels", methods=["POST"])
 @token_required
 def route_billing_vessels():return get_vessels_for_billing()
+
+@app.route(API + "/billing/generate", methods=["POST"])
+@token_required
+def route_generate_bill():return generate_bill()
 
 @app.route(API + '/rates/<int:vessel_id>/<int:rate_id>', methods=['POST'])
 @token_required
