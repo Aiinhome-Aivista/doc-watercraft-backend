@@ -2,7 +2,15 @@ from flask import request, jsonify
 from database.db_connection import get_db_connection
 from datetime import datetime
 from decimal import Decimal
-import math
+
+
+def _row(row, keys):
+    d = dict(zip(keys, row))
+    for k, v in d.items():
+        if isinstance(v, datetime):
+            d[k] = v.strftime("%Y-%m-%d %H:%M:%S")
+    return d
+
 
 
 # ===============================
