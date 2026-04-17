@@ -33,17 +33,34 @@ def get_vessels():
 def get_vessel(vessel_id):
     conn = get_db_connection()
     cursor = conn.cursor()
+
     try:
-        cursor.execute("SELECT * FROM vessels WHERE id = %s", (vessel_id,))
+        cursor.execute("""
+            SELECT 
+                v.*,
+                p.party_name
+            FROM vessels v
+            LEFT JOIN party_masters p ON v.party_id = p.id
+            WHERE v.id = %s
+        """, (vessel_id,))
+
         cols = [c[0] for c in cursor.description]
         row = cursor.fetchone()
+
         if not row:
-            return jsonify({"success": False, "message": "Vessel not found"}), 404
-        return jsonify({"success": True, "data": _vessel_row(row, cols)}), 200
+            return jsonify({
+                "success": False,
+                "message": "Vessel not found"
+            }), 404
+
+        return jsonify({
+            "success": True,
+            "data": _vessel_row(row, cols)
+        }), 200
+
     finally:
         cursor.close()
         conn.close()
-
 
 # ---------- CREATE vessel ----------
 # def create_vessel():
