@@ -38,7 +38,7 @@ def get_vessel(vessel_id):
         cursor.execute("""
             SELECT 
                 v.*,
-                p.party_name
+                p.party_name AS party_name
             FROM vessels v
             LEFT JOIN party_masters p ON v.party_id = p.id
             WHERE v.id = %s
