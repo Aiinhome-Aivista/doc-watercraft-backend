@@ -380,7 +380,7 @@ def create_wbout():
             data["gate_entry_id"], data["weighment_slip_no"], data["wbout_datetime"],
             data.get("gross_weight"), data.get("tare_weight")
         ))
-        cursor.execute("UPDATE gate_entries SET status='COMPLETED' WHERE id=%s", (data["gate_entry_id"],))
+        cursor.execute("UPDATE gate_entries SET status='GATE_OUT' WHERE id=%s", (data["gate_entry_id"],))
         conn.commit()
         return jsonify({"success": True, "message": "WBOUT recorded"}), 201
     except Exception as e:
