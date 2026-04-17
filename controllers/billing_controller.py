@@ -2,6 +2,7 @@ from flask import request, jsonify
 from database.db_connection import get_db_connection
 from datetime import datetime
 from decimal import Decimal
+import math
 
 
 def _row(row, keys):
