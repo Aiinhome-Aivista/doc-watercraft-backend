@@ -229,12 +229,46 @@ def generate_bill():
 
         conn.commit()
 
+        # ===============================
+        # 🔹 FETCH SAVED BILL DATA
+        # ===============================
+
+        # 1️⃣ Get bill_main
+        cursor.execute("""
+            SELECT *
+            FROM bill_main
+            WHERE id = %s
+        """, (bill_main_id,))
+
+        cols_main = [c[0] for c in cursor.description]
+        bill_main_row = dict(zip(cols_main, cursor.fetchone()))
+
+        # 2️⃣ Get bill_details
+        cursor.execute("""
+            SELECT *
+            FROM bill_details
+            WHERE bill_main_id = %s
+        """, (bill_main_id,))
+
+        cols_details = [c[0] for c in cursor.description]
+        details_rows = []
+
+        for r in cursor.fetchall():
+            row = dict(zip(cols_details, r))
+
+            # Convert Decimal to float
+            for k, v in row.items():
+                if isinstance(v, Decimal):
+                    row[k] = float(v)
+
+            details_rows.append(row)
+
+
+        # 3️⃣ Final Response
         return jsonify({
             "success": True,
-            "bill_id": bill_main_id,
-            "base": float(total_base),
-            "gst": float(total_gst),
-            "total": float(total_bill_value)
+            "bill": bill_main_row,
+            "details": details_rows
         })
 
     except Exception as e:
