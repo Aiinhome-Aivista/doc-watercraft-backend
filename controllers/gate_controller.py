@@ -12,36 +12,105 @@ def _row(row, keys):
 
 
 # ---------- GET all gate entries ----------
+# def get_gate_entries():
+#     vessel_id = request.args.get("vessel_id")
+#     status = request.args.get("status")
+#     conn = get_db_connection()
+#     cursor = conn.cursor()
+#     try:
+#         sql = """
+#             SELECT ge.*, v.vessel_name, v.party_id, v.direction,co.compressor_no,co.id as cargo_operation_id
+#             FROM gate_entries ge
+#             JOIN vessels v ON ge.vessel_id = v.id
+#             LEFT JOIN cargo_operations co 
+#             ON co.gate_entry_id = ge.id
+#             WHERE 1=1
+#         """
+#         params = []
+#         if vessel_id:
+#             sql += " AND ge.vessel_id = %s"
+#             params.append(vessel_id)
+#         if status:
+#             sql += " AND ge.status = %s"
+#             params.append(status)
+#         sql += " ORDER BY ge.gate_in_datetime DESC"
+#         cursor.execute(sql, params)
+#         cols = [c[0] for c in cursor.description]
+#         rows = [_row(r, cols) for r in cursor.fetchall()]
+#         return jsonify({"success": True, "data": rows}), 200
+#     finally:
+#         cursor.close()
+#         conn.close()
 def get_gate_entries():
     vessel_id = request.args.get("vessel_id")
     status = request.args.get("status")
+
+    # pagination
+    page = int(request.args.get("page", 1))
+    per_page = int(request.args.get("per_page", 10))
+    offset = (page - 1) * per_page
+
     conn = get_db_connection()
     cursor = conn.cursor()
+
     try:
-        sql = """
-            SELECT ge.*, v.vessel_name, v.party_id, v.direction,co.compressor_no,co.id as cargo_operation_id
+        base_query = """
             FROM gate_entries ge
             JOIN vessels v ON ge.vessel_id = v.id
             LEFT JOIN cargo_operations co 
-            ON co.gate_entry_id = ge.id
+                ON co.gate_entry_id = ge.id
             WHERE 1=1
         """
+
         params = []
+
         if vessel_id:
-            sql += " AND ge.vessel_id = %s"
+            base_query += " AND ge.vessel_id = %s"
             params.append(vessel_id)
+
         if status:
-            sql += " AND ge.status = %s"
+            base_query += " AND ge.status = %s"
             params.append(status)
-        sql += " ORDER BY ge.gate_in_datetime DESC"
-        cursor.execute(sql, params)
+
+        # ✅ total count
+        count_query = "SELECT COUNT(*) " + base_query
+        cursor.execute(count_query, tuple(params))
+        total = cursor.fetchone()[0]
+
+        # ✅ data query
+        data_query = """
+            SELECT 
+                ge.*, 
+                v.vessel_name, 
+                v.party_id, 
+                v.direction,
+                co.compressor_no,
+                co.id as cargo_operation_id
+        """ + base_query + """
+            ORDER BY ge.gate_in_datetime DESC
+            LIMIT %s OFFSET %s
+        """
+
+        params.extend([per_page, offset])
+        cursor.execute(data_query, tuple(params))
+
         cols = [c[0] for c in cursor.description]
         rows = [_row(r, cols) for r in cursor.fetchall()]
-        return jsonify({"success": True, "data": rows}), 200
+
+        return jsonify({
+            "success": True,
+            "data": rows,
+            "pagination": {
+                "page": page,
+                "per_page": per_page,
+                "total": total,
+                "total_pages": (total + per_page - 1) // per_page
+            }
+        }), 200
+
     finally:
         cursor.close()
         conn.close()
-
 
 # ---------- CREATE gate entry ----------
 def create_gate_entry():

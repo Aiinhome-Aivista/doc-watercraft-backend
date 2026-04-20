@@ -12,45 +12,99 @@ def _vessel_row(row, keys):
 
 
 # ---------- GET all vessels ----------
+# def get_vessels():
+#     status_filter = request.args.get("status")
+
+#     conn = get_db_connection()
+#     cursor = conn.cursor()
+
+#     try:
+#         if status_filter:
+#             cursor.execute("""
+#                 SELECT 
+#                     v.*,
+#                     p.party_name
+#                 FROM vessels v
+#                 LEFT JOIN party_masters p ON v.party_id = p.id
+#                 WHERE v.status = %s
+#                 ORDER BY v.created_at DESC
+#             """, (status_filter,))
+#         else:
+#             cursor.execute("""
+#                 SELECT 
+#                     v.*,
+#                     p.party_name
+#                 FROM vessels v
+#                 LEFT JOIN party_masters p ON v.party_id = p.id
+#                 ORDER BY v.created_at DESC
+#             """)
+
+#         cols = [c[0] for c in cursor.description]
+#         rows = [_vessel_row(r, cols) for r in cursor.fetchall()]
+
+#         return jsonify({
+#             "success": True,
+#             "data": rows
+#         }), 200
+
+#     finally:
+#         cursor.close()
+#         conn.close()
 def get_vessels():
     status_filter = request.args.get("status")
+
+    page = int(request.args.get("page", 1))
+    per_page = int(request.args.get("per_page", 10))
+    offset = (page - 1) * per_page
 
     conn = get_db_connection()
     cursor = conn.cursor()
 
     try:
+        base_query = """
+            FROM vessels v
+            LEFT JOIN party_masters p ON v.party_id = p.id
+        """
+
+        params = []
+
         if status_filter:
-            cursor.execute("""
-                SELECT 
-                    v.*,
-                    p.party_name
-                FROM vessels v
-                LEFT JOIN party_masters p ON v.party_id = p.id
-                WHERE v.status = %s
-                ORDER BY v.created_at DESC
-            """, (status_filter,))
-        else:
-            cursor.execute("""
-                SELECT 
-                    v.*,
-                    p.party_name
-                FROM vessels v
-                LEFT JOIN party_masters p ON v.party_id = p.id
-                ORDER BY v.created_at DESC
-            """)
+            base_query += " WHERE v.status = %s"
+            params.append(status_filter)
+
+        # total count
+        count_query = "SELECT COUNT(*) " + base_query
+        cursor.execute(count_query, tuple(params))
+        total = cursor.fetchone()[0]
+
+        # data query
+        data_query = """
+            SELECT v.*, p.party_name
+        """ + base_query + """
+            ORDER BY v.created_at DESC
+            LIMIT %s OFFSET %s
+        """
+
+        params.extend([per_page, offset])
+        cursor.execute(data_query, tuple(params))
 
         cols = [c[0] for c in cursor.description]
         rows = [_vessel_row(r, cols) for r in cursor.fetchall()]
 
         return jsonify({
             "success": True,
-            "data": rows
+            "data": rows,
+            "pagination": {
+                "page": page,
+                "per_page": per_page,
+                "total": total,
+                "total_pages": (total + per_page - 1) // per_page
+            }
         }), 200
 
     finally:
         cursor.close()
         conn.close()
-
 
 # ---------- GET single vessel ----------
 def get_vessel(vessel_id):
