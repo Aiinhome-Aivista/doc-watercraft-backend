@@ -57,6 +57,7 @@ def get_gate_entries():
         base_query = """
             FROM gate_entries ge
             JOIN vessels v ON ge.vessel_id = v.id
+            LEFT JOIN party_masters p ON v.party_id = p.id
             LEFT JOIN cargo_operations co 
                 ON co.gate_entry_id = ge.id
             WHERE 1=1
@@ -81,6 +82,7 @@ def get_gate_entries():
         data_query = """
             SELECT 
                 ge.*, 
+                p.party_name as party_name,
                 v.vessel_name, 
                 v.party_id, 
                 v.direction,
