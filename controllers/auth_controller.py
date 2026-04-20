@@ -151,6 +151,124 @@ def login():
 #     finally:
 #         conn.close()
 
+def change_password():
+    data = request.get_json()
+
+    if not data or not data.get("old_password") or not data.get("new_password"):
+        return jsonify({
+            "status": "error",
+            "message": "Old and new password required"
+        }), 400
+
+    try:
+        # 🔐 Get token from header
+        auth_header = request.headers.get("Authorization")
+        token = auth_header.split(" ")[1]
+
+        decoded = jwt.decode(
+            token,
+            current_app.config['SECRET_KEY'],
+            algorithms=["HS256"]
+        )
+
+        user_id = decoded["user_id"]
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # 🔹 Verify old password
+        cursor.execute("SELECT password FROM users WHERE id=%s", (user_id,))
+        user = cursor.fetchone()
+
+        if not user or user[0] != data["old_password"]:
+            return jsonify({
+                "status": "error",
+                "message": "Old password incorrect"
+            }), 400
+
+        # 🔹 Update password
+        cursor.execute("""
+            UPDATE users 
+            SET password=%s 
+            WHERE id=%s
+        """, (data["new_password"], user_id))
+
+        conn.commit()
+
+        return jsonify({
+            "status": "success",
+            "message": "Password changed successfully"
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
+
+    finally:
+        conn.close()
+
+def admin_change_user_password(user_id):
+    data = request.get_json()
+
+    if not data or not data.get("new_password"):
+        return jsonify({
+            "status": "error",
+            "message": "New password required"
+        }), 400
+
+    try:
+        # 🔐 Get token
+        auth_header = request.headers.get("Authorization")
+        token = auth_header.split(" ")[1]
+
+        decoded = jwt.decode(
+            token,
+            current_app.config['SECRET_KEY'],
+            algorithms=["HS256"]
+        )
+
+        # 🔹 Check role
+        if decoded.get("role") != "admin":
+            return jsonify({
+                "status": "error",
+                "message": "Only admin can change user password"
+            }), 403
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # 🔹 Check user exists
+        cursor.execute("SELECT id FROM users WHERE id=%s", (user_id,))
+        if not cursor.fetchone():
+            return jsonify({
+                "status": "error",
+                "message": "User not found"
+            }), 404
+
+        # 🔹 Update password
+        cursor.execute("""
+            UPDATE users 
+            SET password=%s 
+            WHERE id=%s
+        """, (data["new_password"], user_id))
+
+        conn.commit()
+
+        return jsonify({
+            "status": "success",
+            "message": "User password updated by admin"
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
+
+    finally:
+        conn.close()
 
 def register():
     data = request.get_json()

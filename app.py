@@ -2,7 +2,7 @@ from flask import Flask
 from flask_cors import CORS
 from middleware.auth_middleware import token_required
 
-from controllers.auth_controller import (login,register,get_loggedin_user,get_all_users,update_access_rights,get_access_rights)
+from controllers.auth_controller import (login,register,get_loggedin_user,get_all_users,update_access_rights,get_access_rights,change_password,admin_change_user_password)
 from controllers.vessel_controller import (
     get_vessels, get_vessel, create_vessel,
     berth_vessel, moor_vessel, survey_vessel, unberth_vessel,
@@ -39,6 +39,14 @@ def route_loggedin_user(): return get_loggedin_user()
 @app.route(API + '/users', methods=['GET'])
 @token_required
 def route_get_users(): return get_all_users()
+
+@app.route(API + '/change-password', methods=['POST'])
+@token_required
+def route_change_password():return change_password()
+
+@app.route(API + '/change-password/<int:user_id>', methods=['POST'])
+@token_required
+def route_admin_change_password(user_id):return admin_change_user_password(user_id)
 
 # ─── Access Rights Routes ───────────────────────────────────────
 @app.route(API + '/access-rights/<int:user_id>', methods=['POST'])
