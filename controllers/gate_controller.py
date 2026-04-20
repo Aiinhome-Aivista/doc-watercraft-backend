@@ -84,6 +84,8 @@ def get_gate_entries():
                 ge.*, 
                 p.party_name as party_name,
                 v.vessel_name, 
+                v.berthing_datetime,
+                v.mooring_datetime,
                 v.party_id, 
                 v.direction,
                 co.compressor_no,
