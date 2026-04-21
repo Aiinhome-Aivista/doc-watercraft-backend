@@ -1,15 +1,9 @@
 from flask import request, jsonify
 from database.db_connection import get_db_connection
-from datetime import datetime, timedelta
+from datetime import datetime
 from decimal import Decimal
 import math
 
-
-# ===============================
-# 🔹 HELPERS
-# ===============================
-def ceil(x):
-    return math.ceil(float(x))
 
 def _row(row, keys):
     d = dict(zip(keys, row))
@@ -20,22 +14,8 @@ def _row(row, keys):
 
 
 
-def adjust_berthing_start(dt):
-    if dt.hour >= 6:
-        return dt.replace(hour=6, minute=0, second=0, microsecond=0)
-    else:
-        return (dt - timedelta(days=1)).replace(hour=6, minute=0, second=0, microsecond=0)
-
-
-def adjust_berthing_end(dt):
-    if dt.hour >= 6:
-        return (dt + timedelta(days=1)).replace(hour=6, minute=0, second=0, microsecond=0)
-    else:
-        return dt.replace(hour=6, minute=0, second=0, microsecond=0)
-
-
 # ===============================
-# 🔹 BUILD CONTEXT
+# 🔹 BUILD CONTEXT FROM DB
 # ===============================
 def build_context(vessel_id):
     conn = get_db_connection()
@@ -118,91 +98,60 @@ def calculate_amount(row, context):
     formula = row["formula"]
     rate = Decimal(row["rate"])
 
-    qty = Decimal(0)
-    amount = Decimal(0)
-
     # ---------------- Logic 1 ----------------
     if formula == "Logic1":
-        qty = Decimal(context["survey_qty"])
-        amount = qty * rate
+        return Decimal(context["survey_qty"]) * rate
 
     # ---------------- Logic 2 ----------------
     elif formula == "Logic2":
-        qty = Decimal(context["gatein_count"])
-        amount = qty * rate
+        return Decimal(context["gatein_count"]) * rate
 
-    # ---------------- Logic 3 (Berthing FIXED) ----------------
+    # ---------------- Logic 3 (Berthing) ----------------
     elif formula == "Logic3":
         start = context["berthing_time"]
         end = context["unberthing_time"]
 
         if not start or not end:
-            return Decimal(0), Decimal(0)
+            return Decimal(0)
 
-        A1 = adjust_berthing_start(start)
-        A2 = adjust_berthing_end(end)
+        hours = Decimal((end - start).total_seconds()) / Decimal(3600)
+        days = math.ceil(hours / Decimal(24))   # rounded
 
-        days = ceil((A2 - A1).total_seconds() / 86400)
+        return Decimal(days) * rate
 
-        qty = Decimal(days)
-        amount = qty * rate
-
-    # ---------------- Logic 4 (Mooring FIXED) ----------------
+    # ---------------- Logic 4 (Mooring) ----------------
     elif formula == "Logic4":
         start = context["mooring_start"]
         end = context["mooring_end"]
 
         if not start or not end:
-            return Decimal(0), Decimal(0)
+            return Decimal(0)
 
-        hours = (end - start).total_seconds() / 3600
-        slabs = ceil(hours / 8)
+        hours = Decimal((end - start).total_seconds()) / Decimal(3600)
+        days = math.ceil(hours / Decimal(24))
 
-        qty = Decimal(slabs)
-        amount = qty * rate
-
-    # ---------------- Logic 5 (NEW) ----------------
-    elif formula == "Logic5":
-        start = context["mooring_start"]
-        end = context["mooring_end"]
-
-        if not start or not end:
-            return Decimal(0), Decimal(0)
-
-        hours = (end - start).total_seconds() / 3600
-        days = ceil(hours / 24)
-
-        vessel_qty = Decimal(context["survey_qty"])
-
-        if vessel_qty <= 1400:
-            slab_rate = Decimal(2000)
-        elif vessel_qty <= 2100:
-            slab_rate = Decimal(4000)
-        else:
-            slab_rate = Decimal(5500)
-
-        qty = Decimal(days)
-        amount = qty * slab_rate
+        return Decimal(days) * rate
 
     # ---------------- Logic 6 ----------------
     elif formula == "Logic6":
-        qty = Decimal(context["wbin_count"])
-        amount = qty * rate
+        return Decimal(context["wbin_count"]) * rate
 
-    # ---------------- Logic 7 ----------------
+    # ---------------- Logic 7 (Parking) ----------------
     elif formula == "Logic7":
         total_days = Decimal(0)
 
         for v in context["vehicles"]:
-            hrs = (v["gateout"] - v["gatein"]).total_seconds() / 3600
-            charge = max(0, hrs - 24)
-            days = ceil(charge / 24)
+            if not v["gatein"] or not v["gateout"]:
+                continue
+
+            hrs = Decimal((v["gateout"] - v["gatein"]).total_seconds()) / Decimal(3600)
+            charge = max(Decimal(0), hrs - Decimal(24))
+            days = math.ceil(charge / Decimal(24))
             total_days += Decimal(days)
 
-        qty = total_days
-        amount = qty * rate
+        return total_days * rate
 
-    return qty, amount
+    return Decimal(0)
 
 
 # ===============================
@@ -212,7 +161,7 @@ def generate_bill():
     data = request.get_json()
 
     party_id = data.get("party_id")
-    vessel_id = data.get("vessel_id")
+    vessel_id = data.get("vessel_id")  
     start_date = data.get("period_start")
     end_date = data.get("period_end")
 
@@ -227,11 +176,12 @@ def generate_bill():
         total_gst = Decimal(0)
         bill_details = []
 
+
         context = build_context(vessel_id)
         rates = fetch_rates(vessel_id)
 
         for r in rates:
-            qty, amount = calculate_amount(r, context)
+            amount = calculate_amount(r, context)
 
             gst_rate = Decimal(r["gst_rate"])
             gst = (amount * gst_rate) / Decimal(100)
@@ -242,19 +192,14 @@ def generate_bill():
             bill_details.append({
                 "vessel_id": vessel_id,
                 "activity": r["activity"],
-                "qty": float(qty),
+                "qty": 1,
                 "rate": float(r["rate"]),
                 "amount": float(amount),
-                "gst_rate": float(gst_rate),
+                "gst_rate": float(r["gst_rate"]),
                 "gst_amount": float(gst)
             })
 
         total_bill_value = total_base + total_gst
-
-        # GST Split (India)
-        cgst = total_gst / 2
-        sgst = total_gst / 2
-        igst = 0
 
         # 🔹 Insert bill_main
         cursor.execute("""
@@ -268,9 +213,7 @@ def generate_bill():
             start_date,
             end_date,
             float(total_base),
-            float(cgst),
-            float(sgst),
-            float(igst),
+            0, 0, float(total_gst),
             float(total_bill_value)
         ))
 
@@ -286,21 +229,36 @@ def generate_bill():
                 bill_main_id,
                 d["vessel_id"],
                 d["activity"],
-                d["qty"],
-                d["rate"],
-                d["amount"],
-                d["gst_rate"],
-                d["gst_amount"]
+                float(d["qty"]),
+                float(d["rate"]),
+                float(d["amount"]),
+                float(d["gst_rate"]),
+                float(d["gst_amount"])
             ))
 
         conn.commit()
 
+        # 🔹 Fetch bill_main
+        cursor.execute("SELECT * FROM bill_main WHERE id=%s", (bill_main_id,))
+        cols_main = [c[0] for c in cursor.description]
+        bill_main_row = dict(zip(cols_main, cursor.fetchone()))
+
+        # 🔹 Fetch bill_details
+        cursor.execute("SELECT * FROM bill_details WHERE bill_main_id=%s", (bill_main_id,))
+        cols_details = [c[0] for c in cursor.description]
+
+        details = []
+        for r in cursor.fetchall():
+            row = dict(zip(cols_details, r))
+            for k, v in row.items():
+                if isinstance(v, Decimal):
+                    row[k] = float(v)
+            details.append(row)
+
         return jsonify({
             "success": True,
-            "total_base": float(total_base),
-            "total_gst": float(total_gst),
-            "total_bill": float(total_bill_value),
-            "details": bill_details
+            "bill": bill_main_row,
+            "details": details
         })
 
     except Exception as e:
