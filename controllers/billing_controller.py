@@ -19,7 +19,6 @@ def _row(row, keys):
     return d
 
 
-
 def adjust_berthing_start(dt):
     if dt.hour >= 6:
         return dt.replace(hour=6, minute=0, second=0, microsecond=0)
@@ -120,24 +119,22 @@ def calculate_amount(row, context):
 
     qty = Decimal(0)
     amount = Decimal(0)
+    final_rate = rate
 
-    # ---------------- Logic 1 ----------------
     if formula == "Logic1":
         qty = Decimal(context["survey_qty"])
         amount = qty * rate
 
-    # ---------------- Logic 2 ----------------
     elif formula == "Logic2":
         qty = Decimal(context["gatein_count"])
         amount = qty * rate
 
-    # ---------------- Logic 3 (Berthing FIXED) ----------------
     elif formula == "Logic3":
         start = context["berthing_time"]
         end = context["unberthing_time"]
 
         if not start or not end:
-            return Decimal(0), Decimal(0)
+            return Decimal(0), Decimal(0), rate
 
         A1 = adjust_berthing_start(start)
         A2 = adjust_berthing_end(end)
@@ -147,13 +144,12 @@ def calculate_amount(row, context):
         qty = Decimal(days)
         amount = qty * rate
 
-    # ---------------- Logic 4 (Mooring FIXED) ----------------
     elif formula == "Logic4":
         start = context["mooring_start"]
         end = context["mooring_end"]
 
         if not start or not end:
-            return Decimal(0), Decimal(0)
+            return Decimal(0), Decimal(0), rate
 
         hours = (end - start).total_seconds() / 3600
         slabs = ceil(hours / 8)
@@ -161,35 +157,44 @@ def calculate_amount(row, context):
         qty = Decimal(slabs)
         amount = qty * rate
 
-    # ---------------- Logic 5 (NEW) ----------------
     elif formula == "Logic5":
         start = context["mooring_start"]
         end = context["mooring_end"]
 
         if not start or not end:
-            return Decimal(0), Decimal(0)
+            return Decimal(0), Decimal(0), rate
 
         hours = (end - start).total_seconds() / 3600
         days = ceil(hours / 24)
 
         vessel_qty = Decimal(context["survey_qty"])
 
-        if vessel_qty <= 1400:
-            slab_rate = Decimal(2000)
-        elif vessel_qty <= 2100:
-            slab_rate = Decimal(4000)
-        else:
-            slab_rate = Decimal(5500)
+        slabs = [
+            r for r in context.get("all_rates", [])
+            if r["activity"] == row["activity"] and r["formula"] == "Logic5"
+        ]
 
+        slab_rate = None
+
+        for slab in slabs:
+            min_q = Decimal(slab["min_qty"] or 0)
+            max_q = Decimal(slab["max_qty"] or 999999999)
+
+            if min_q <= vessel_qty <= max_q:
+                slab_rate = Decimal(slab["rate"])
+                break
+
+        if slab_rate is None:
+            slab_rate = rate
+
+        final_rate = slab_rate
         qty = Decimal(days)
         amount = qty * slab_rate
 
-    # ---------------- Logic 6 ----------------
     elif formula == "Logic6":
         qty = Decimal(context["wbin_count"])
         amount = qty * rate
 
-    # ---------------- Logic 7 ----------------
     elif formula == "Logic7":
         total_days = Decimal(0)
 
@@ -202,7 +207,7 @@ def calculate_amount(row, context):
         qty = total_days
         amount = qty * rate
 
-    return qty, amount
+    return qty, amount, final_rate
 
 
 # ===============================
@@ -229,9 +234,21 @@ def generate_bill():
 
         context = build_context(vessel_id)
         rates = fetch_rates(vessel_id)
+        context["all_rates"] = rates
+
+        processed_logic5 = False
 
         for r in rates:
-            qty, amount = calculate_amount(r, context)
+
+            if r["formula"] == "Logic5":
+                if processed_logic5:
+                    continue
+                processed_logic5 = True
+
+            qty, amount, final_rate = calculate_amount(r, context)
+
+            if qty == 0 or amount == 0:
+                continue
 
             gst_rate = Decimal(r["gst_rate"])
             gst = (amount * gst_rate) / Decimal(100)
@@ -243,7 +260,7 @@ def generate_bill():
                 "vessel_id": vessel_id,
                 "activity": r["activity"],
                 "qty": float(qty),
-                "rate": float(r["rate"]),
+                "rate": float(final_rate),
                 "amount": float(amount),
                 "gst_rate": float(gst_rate),
                 "gst_amount": float(gst)
@@ -251,12 +268,10 @@ def generate_bill():
 
         total_bill_value = total_base + total_gst
 
-        # GST Split (India)
         cgst = total_gst / 2
         sgst = total_gst / 2
         igst = 0
 
-        # 🔹 Insert bill_main
         cursor.execute("""
             INSERT INTO bill_main
             (voucher_number, bill_date, party_id, period_start, period_end,
@@ -276,7 +291,6 @@ def generate_bill():
 
         bill_main_id = cursor.lastrowid
 
-        # 🔹 Insert bill_details
         for d in bill_details:
             cursor.execute("""
                 INSERT INTO bill_details
