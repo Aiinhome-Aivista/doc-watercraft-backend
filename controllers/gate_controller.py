@@ -117,10 +117,76 @@ def get_gate_entries():
         conn.close()
 
 # ---------- CREATE gate entry ----------
+# def create_gate_entry():
+#     data = request.get_json()
+
+#     required = ["vessel_id", "consignor_name", "challan_invoice_no", "vehicle_id", "gate_in_datetime"]
+#     missing = [f for f in required if not data.get(f)]
+
+#     if missing:
+#         return jsonify({"success": False, "message": f"Missing: {', '.join(missing)}"}), 400
+
+#     own_wb = int(data.get("own_weighbridge", 0))
+#     initial_status = "PENDING_WBOUT" if own_wb else "PENDING_WBIN"
+
+#     conn = get_db_connection()
+#     cursor = conn.cursor()
+
+#     try:
+#         cursor.execute("""
+#             INSERT INTO gate_entries
+#             (vessel_id, consignor_name, challan_invoice_no,
+#              vehicle_id, weighment_slip_no, own_weighbridge,
+#              gate_in_datetime, status, direction)
+#             VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+#         """, (
+#             data["vessel_id"],
+#             data["consignor_name"],
+#             data["challan_invoice_no"],
+#             data["vehicle_id"],   # ✅ FK
+#             data.get("weighment_slip_no"),
+#             own_wb,
+#             data["gate_in_datetime"],
+#             initial_status,
+#             data.get("direction")   # ✅ new field
+#         ))
+
+#         conn.commit()
+#         new_id = cursor.lastrowid
+
+#         # 🔥 JOIN vehicle_master
+#         cursor.execute("""
+#             SELECT 
+#                 ge.*,
+#                 v.vessel_name,
+#                 vm.vehicle_no,
+#                 vm.transporter_name
+#             FROM gate_entries ge
+#             JOIN vessels v ON ge.vessel_id = v.id
+#             LEFT JOIN vehicle_master vm ON ge.vehicle_id = vm.id
+#             WHERE ge.id = %s
+#         """, (new_id,))
+
+#         cols = [c[0] for c in cursor.description]
+
+#         return jsonify({
+#             "success": True,
+#             "data": _row(cursor.fetchone(), cols),
+#             "message": "Gate entry created"
+#         }), 201
+
+#     except Exception as e:
+#         conn.rollback()
+#         return jsonify({"success": False, "message": str(e)}), 500
+
+#     finally:
+#         cursor.close()
+#         conn.close()
 def create_gate_entry():
     data = request.get_json()
 
-    required = ["vessel_id", "consignor_name", "challan_invoice_no", "vehicle_id", "gate_in_datetime"]
+    # ✅ vessel_id removed from required
+    required = ["consignor_name", "challan_invoice_no", "vehicle_id", "gate_in_datetime"]
     missing = [f for f in required if not data.get(f)]
 
     if missing:
@@ -140,21 +206,21 @@ def create_gate_entry():
              gate_in_datetime, status, direction)
             VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """, (
-            data["vessel_id"],
+            data.get("vessel_id"),   # ✅ can be NULL
             data["consignor_name"],
             data["challan_invoice_no"],
-            data["vehicle_id"],   # ✅ FK
+            data["vehicle_id"],
             data.get("weighment_slip_no"),
             own_wb,
             data["gate_in_datetime"],
             initial_status,
-            data.get("direction")   # ✅ new field
+            data.get("direction")
         ))
 
         conn.commit()
         new_id = cursor.lastrowid
 
-        # 🔥 JOIN vehicle_master
+        # ✅ FIX: LEFT JOIN (important)
         cursor.execute("""
             SELECT 
                 ge.*,
@@ -162,7 +228,7 @@ def create_gate_entry():
                 vm.vehicle_no,
                 vm.transporter_name
             FROM gate_entries ge
-            JOIN vessels v ON ge.vessel_id = v.id
+            LEFT JOIN vessels v ON ge.vessel_id = v.id
             LEFT JOIN vehicle_master vm ON ge.vehicle_id = vm.id
             WHERE ge.id = %s
         """, (new_id,))
@@ -182,7 +248,6 @@ def create_gate_entry():
     finally:
         cursor.close()
         conn.close()
-
 # ---------- Gate Out ----------
 def gate_out(gate_id):
     data = request.get_json()
@@ -328,6 +393,7 @@ def create_cargo_operation():
 
     required = ["gate_entry_id", "operation_type"]
     missing = [f for f in required if not data.get(f)]
+
     if missing:
         return jsonify({"success": False, "message": f"Missing: {', '.join(missing)}"}), 400
 
@@ -338,7 +404,27 @@ def create_cargo_operation():
         start_dt = data.get("start_datetime") or None
         end_dt = data.get("end_datetime") or None
 
-        # ✅ Insert
+        # 🔹 STEP 1: Get existing vessel_id
+        cursor.execute("""
+            SELECT vessel_id 
+            FROM gate_entries 
+            WHERE id = %s
+        """, (data["gate_entry_id"],))
+
+        row = cursor.fetchone()
+
+        if not row:
+            return jsonify({
+                "success": False,
+                "message": "Gate entry not found"
+            }), 404
+
+        existing_vessel_id = row[0]
+
+        # 🔥 STEP 2: Decide vessel_id
+        vessel_id = data.get("vessel_id") or existing_vessel_id
+
+        # 🔹 STEP 3: Insert cargo operation
         cursor.execute("""
             INSERT INTO cargo_operations 
             (gate_entry_id, operation_type, start_datetime, end_datetime, compressor_no, remarks)
@@ -352,19 +438,22 @@ def create_cargo_operation():
             data.get("remarks")
         ))
 
-        # ✅ STATUS LOGIC FIX
+        # 🔥 STEP 4: Update vessel_id in gate_entries (if provided)
+        if data.get("vessel_id"):
+            cursor.execute("""
+                UPDATE gate_entries 
+                SET vessel_id = %s
+                WHERE id = %s
+            """, (data["vessel_id"], data["gate_entry_id"]))
+
+        # 🔹 STATUS LOGIC
         if start_dt and not end_dt:
-            # Operation started
             new_status = "UNLOADING"
-
         elif end_dt:
-            # Operation completed
             new_status = "PENDING_WBOUT"
-
         else:
-            new_status = None  # no change
+            new_status = None
 
-        # ✅ Only update if needed
         if new_status:
             cursor.execute("""
                 UPDATE gate_entries 
@@ -376,7 +465,7 @@ def create_cargo_operation():
 
         return jsonify({
             "success": True,
-            "message": "Operation created (status handled correctly)"
+            "message": "Cargo operation created and vessel updated (if provided)"
         }), 201
 
     except Exception as e:
