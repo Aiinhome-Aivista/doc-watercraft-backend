@@ -83,27 +83,27 @@ def route_update_partymaster(partymaster_id):return update_partymaster(partymast
 def route_delete_partymaster(partymaster_id):return delete_partymaster(partymaster_id)
 
 # ─── vehicles Masters Routes ─────────────────────────────────────
-@app.route('/vehicles', methods=['POST'])
+@app.route(API + '/vehicles', methods=['POST'])
 @token_required
 def add_vehicle():return create_vehicle()
 
-@app.route('/vehicles', methods=['GET'])
+@app.route(API + '/vehicles', methods=['GET'])
 @token_required
 def list_vehicles():return get_vehicles()
 
-@app.route('/vehicles/<int:vehicle_id>', methods=['GET'])
+@app.route(API + '/vehicles/<int:vehicle_id>', methods=['GET'])
 @token_required
 def single_vehicle(vehicle_id):return get_vehicle(vehicle_id)
 
-@app.route('/vehicles/<int:vehicle_id>', methods=['PUT'])
+@app.route(API + '/vehicles/<int:vehicle_id>', methods=['PUT'])
 @token_required
 def edit_vehicle(vehicle_id):return update_vehicle(vehicle_id)
 
-@app.route('/vehicles/<int:vehicle_id>', methods=['DELETE'])
+@app.route(API + '/vehicles/<int:vehicle_id>', methods=['DELETE'])
 @token_required
 def remove_vehicle(vehicle_id):return delete_vehicle(vehicle_id)
 
-@app.route('/vehicles/<int:vehicle_id>/toggle', methods=['PATCH'])
+@app.route(API + '/vehicles/<int:vehicle_id>/toggle', methods=['PATCH'])
 @token_required
 def toggle_vehicle(vehicle_id):return toggle_vehicle_status(vehicle_id)
 
