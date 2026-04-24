@@ -112,6 +112,7 @@ def get_vessel(vessel_id):
     cursor = conn.cursor()
 
     try:
+        # 🔹 Get vessel + party
         cursor.execute("""
             SELECT 
                 v.*,
@@ -121,18 +122,39 @@ def get_vessel(vessel_id):
             WHERE v.id = %s
         """, (vessel_id,))
 
-        cols = [c[0] for c in cursor.description]
-        row = cursor.fetchone()
+        vessel_cols = [c[0] for c in cursor.description]
+        vessel_row = cursor.fetchone()
 
-        if not row:
+        if not vessel_row:
             return jsonify({
                 "success": False,
                 "message": "Vessel not found"
             }), 404
 
+        vessel_data = _vessel_row(vessel_row, vessel_cols)
+
+        # 🔹 Get rates (assuming rate_master has vessel_id FK)
+        cursor.execute("""
+            SELECT *
+            FROM rate_master
+            WHERE vessel_id = %s
+        """, (vessel_id,))
+
+        rate_cols = [c[0] for c in cursor.description]
+        rate_rows = cursor.fetchall()
+
+        rates = [
+            dict(zip(rate_cols, row))
+            for row in rate_rows
+        ]
+
+        # 🔹 Final response
         return jsonify({
             "success": True,
-            "data": _vessel_row(row, cols)
+            "data": {
+                "vessel": vessel_data,
+                "rates": rates
+            }
         }), 200
 
     finally:
@@ -235,6 +257,81 @@ def create_vessel():
         cursor.close()
         conn.close()
 
+# ---------- UPDATE vessel ----------
+def update_vessel(vessel_id):
+    data = request.get_json()
+
+    required = ["vessel_name", "party_id", "cargo_type", "quantity", "direction", "expected_date"]
+    missing = [f for f in required if not data.get(f)]
+    if missing:
+        return jsonify({"success": False, "message": f"Missing fields: {', '.join(missing)}"}), 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        # 1️⃣ Update Vessel
+        cursor.execute("""
+            UPDATE vessels
+            SET vessel_name=%s,
+                party_id=%s,
+                cargo_type=%s,
+                quantity=%s,
+                direction=%s,
+                expected_date=%s,
+                updated_at=NOW()
+            WHERE id=%s
+        """, (
+            data["vessel_name"],
+            data["party_id"],
+            data["cargo_type"],
+            data["quantity"],
+            data["direction"],
+            data["expected_date"],
+            vessel_id
+        ))
+
+        # 2️⃣ Remove old rates (simple approach)
+        cursor.execute("DELETE FROM rate_master WHERE vessel_id = %s", (vessel_id,))
+
+        # 3️⃣ Insert new rates
+        rates = data.get("rates", [])
+
+        for r in rates:
+            cursor.execute("""
+                INSERT INTO rate_master
+                (vessel_id, activity, formula, rate, gst_rate, min_qty, max_qty, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
+            """, (
+                vessel_id,
+                r.get("activity"),
+                r.get("formula"),
+                r.get("rate"),
+                r.get("gst_rate"),
+                r.get("min_qty"),
+                r.get("max_qty")
+            ))
+
+        conn.commit()
+
+        # 4️⃣ Return Updated Data
+        cursor.execute("SELECT * FROM vessels WHERE id = %s", (vessel_id,))
+        cols = [c[0] for c in cursor.description]
+        row = cursor.fetchone()
+
+        return jsonify({
+            "success": True,
+            "data": _vessel_row(row, cols),
+            "message": "Vessel + rates updated successfully"
+        }), 200
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "message": str(e)}), 500
+
+    finally:
+        cursor.close()
+        conn.close()
 
 # ---------- BERTH vessel ----------
 def berth_vessel(vessel_id):

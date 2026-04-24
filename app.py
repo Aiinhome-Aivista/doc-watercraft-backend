@@ -3,10 +3,11 @@ from flask_cors import CORS
 from middleware.auth_middleware import token_required
 
 from controllers.auth_controller import (login,register,get_loggedin_user,get_all_users,update_access_rights,get_access_rights,change_password,admin_change_user_password)
+from controllers.vehicle_controller import (create_vehicle, get_vehicles, get_vehicle, update_vehicle, delete_vehicle, toggle_vehicle_status)
 from controllers.vessel_controller import (
     get_vessels, get_vessel, create_vessel,
     berth_vessel, moor_vessel, survey_vessel, unberth_vessel,
-    get_vessel_billing, get_mis_report,get_rates_by_vessel,update_rate
+    get_vessel_billing, get_mis_report,get_rates_by_vessel,update_rate,update_vessel
 )
 from controllers.gate_controller import (
     get_gate_entries, create_gate_entry, gate_out,
@@ -23,6 +24,9 @@ CORS(app)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
 
 API = "/api/v1"
+
+@app.route("/")
+def health():return "API is running"
 
 # ─── Public Routes ──────────────────────────────────────────────
 @app.route(API + '/login', methods=['POST'])
@@ -78,6 +82,31 @@ def route_update_partymaster(partymaster_id):return update_partymaster(partymast
 @token_required
 def route_delete_partymaster(partymaster_id):return delete_partymaster(partymaster_id)
 
+# ─── vehicles Masters Routes ─────────────────────────────────────
+@app.route('/vehicles', methods=['POST'])
+@token_required
+def add_vehicle():return create_vehicle()
+
+@app.route('/vehicles', methods=['GET'])
+@token_required
+def list_vehicles():return get_vehicles()
+
+@app.route('/vehicles/<int:vehicle_id>', methods=['GET'])
+@token_required
+def single_vehicle(vehicle_id):return get_vehicle(vehicle_id)
+
+@app.route('/vehicles/<int:vehicle_id>', methods=['PUT'])
+@token_required
+def edit_vehicle(vehicle_id):return update_vehicle(vehicle_id)
+
+@app.route('/vehicles/<int:vehicle_id>', methods=['DELETE'])
+@token_required
+def remove_vehicle(vehicle_id):return delete_vehicle(vehicle_id)
+
+@app.route('/vehicles/<int:vehicle_id>/toggle', methods=['PATCH'])
+@token_required
+def toggle_vehicle(vehicle_id):return toggle_vehicle_status(vehicle_id)
+
 # ─── Vessel Routes ─────────────────────────────────────────────
 @app.route(API + '/vessels', methods=['GET'])
 @token_required
@@ -86,6 +115,9 @@ def route_get_vessels(): return get_vessels()
 @app.route(API + '/vessels', methods=['POST'])
 @token_required
 def route_create_vessel(): return create_vessel()
+
+@app.route('/api/vessels/<int:vessel_id>', methods=['POST'])
+def update_vessel_route(vessel_id):return update_vessel(vessel_id)
 
 @app.route(API + '/vessels/<int:vessel_id>', methods=['GET'])
 @token_required

@@ -119,8 +119,10 @@ def get_gate_entries():
 # ---------- CREATE gate entry ----------
 def create_gate_entry():
     data = request.get_json()
-    required = ["vessel_id", "consignor_name", "challan_invoice_no", "vehicle_no", "gate_in_datetime"]
+
+    required = ["vessel_id", "consignor_name", "challan_invoice_no", "vehicle_id", "gate_in_datetime"]
     missing = [f for f in required if not data.get(f)]
+
     if missing:
         return jsonify({"success": False, "message": f"Missing: {', '.join(missing)}"}), 400
 
@@ -129,34 +131,57 @@ def create_gate_entry():
 
     conn = get_db_connection()
     cursor = conn.cursor()
+
     try:
         cursor.execute("""
             INSERT INTO gate_entries
-              (vessel_id, consignor_name, challan_invoice_no, vehicle_no,
-               transporter_name, weighment_slip_no, own_weighbridge,
-               gate_in_datetime, status)
+            (vessel_id, consignor_name, challan_invoice_no,
+             vehicle_id, weighment_slip_no, own_weighbridge,
+             gate_in_datetime, status, direction)
             VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """, (
-            data["vessel_id"], data["consignor_name"], data["challan_invoice_no"],
-            data["vehicle_no"], data.get("transporter_name"), data.get("weighment_slip_no"),
-            own_wb, data["gate_in_datetime"], initial_status
+            data["vessel_id"],
+            data["consignor_name"],
+            data["challan_invoice_no"],
+            data["vehicle_id"],   # ✅ FK
+            data.get("weighment_slip_no"),
+            own_wb,
+            data["gate_in_datetime"],
+            initial_status,
+            data.get("direction")   # ✅ new field
         ))
+
         conn.commit()
         new_id = cursor.lastrowid
+
+        # 🔥 JOIN vehicle_master
         cursor.execute("""
-            SELECT ge.*, v.vessel_name, v.party_id, v.direction
-            FROM gate_entries ge JOIN vessels v ON ge.vessel_id = v.id
+            SELECT 
+                ge.*,
+                v.vessel_name,
+                vm.vehicle_no,
+                vm.transporter_name
+            FROM gate_entries ge
+            JOIN vessels v ON ge.vessel_id = v.id
+            LEFT JOIN vehicle_master vm ON ge.vehicle_id = vm.id
             WHERE ge.id = %s
         """, (new_id,))
+
         cols = [c[0] for c in cursor.description]
-        return jsonify({"success": True, "data": _row(cursor.fetchone(), cols), "message": "Gate entry created"}), 201
+
+        return jsonify({
+            "success": True,
+            "data": _row(cursor.fetchone(), cols),
+            "message": "Gate entry created"
+        }), 201
+
     except Exception as e:
         conn.rollback()
         return jsonify({"success": False, "message": str(e)}), 500
+
     finally:
         cursor.close()
         conn.close()
-
 
 # ---------- Gate Out ----------
 def gate_out(gate_id):
