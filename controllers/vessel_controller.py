@@ -261,7 +261,7 @@ def create_vessel():
 def update_vessel(vessel_id):
     data = request.get_json()
 
-    required = ["vessel_name", "party_id", "cargo_type", "quantity", "direction", "expected_date"]
+    required = ["vessel_name", "party_id", "cargo_type", "quantity", "direction"]
     missing = [f for f in required if not data.get(f)]
     if missing:
         return jsonify({"success": False, "message": f"Missing fields: {', '.join(missing)}"}), 400
