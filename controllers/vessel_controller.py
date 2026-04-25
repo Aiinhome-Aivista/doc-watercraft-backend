@@ -278,7 +278,7 @@ def update_vessel(vessel_id):
                 cargo_type=%s,
                 quantity=%s,
                 direction=%s,
-                status='%s',
+                status=%s,
                 expected_date=%s,
                 updated_at=NOW()
             WHERE id=%s
@@ -293,14 +293,12 @@ def update_vessel(vessel_id):
             vessel_id
         ))
 
-        
+        conn.commit()
 
         # 4️⃣ Return Updated Data
         cursor.execute("SELECT * FROM vessels WHERE id = %s", (vessel_id,))
         cols = [c[0] for c in cursor.description]
         row = cursor.fetchone()
-
-        conn.commit()
 
         return jsonify({
             "success": True,
