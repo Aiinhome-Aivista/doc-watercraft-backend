@@ -278,6 +278,7 @@ def update_vessel(vessel_id):
                 cargo_type=%s,
                 quantity=%s,
                 direction=%s,
+                status='%s',
                 expected_date=%s,
                 updated_at=NOW()
             WHERE id=%s
@@ -287,6 +288,7 @@ def update_vessel(vessel_id):
             data["cargo_type"],
             data["quantity"],
             data["direction"],
+            data["status"],
             data["expected_date"],
             vessel_id
         ))
