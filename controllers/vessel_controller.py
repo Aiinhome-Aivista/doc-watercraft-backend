@@ -279,7 +279,6 @@ def update_vessel(vessel_id):
                 quantity=%s,
                 direction=%s,
                 status=%s,
-                expected_date=%s,
                 updated_at=NOW()
             WHERE id=%s
         """, (
@@ -289,7 +288,6 @@ def update_vessel(vessel_id):
             data["quantity"],
             data["direction"],
             data["status"],
-            data["expected_date"],
             vessel_id
         ))
 
