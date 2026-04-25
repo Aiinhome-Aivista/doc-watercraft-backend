@@ -64,6 +64,7 @@ def get_gate_entries():
     finally:
         cursor.close()
         conn.close()
+
 # ---------- CREATE gate entry ----------
 def create_gate_entry():
     data = request.get_json()
@@ -96,6 +97,8 @@ def create_gate_entry():
 
         cols = [c[0] for c in result.description]
         row = result.fetchone()
+
+        conn.commit()
 
         return jsonify({
             "success": True,
@@ -138,6 +141,8 @@ def gate_out(gate_id):
 
         cols = [c[0] for c in result.description]
         row = result.fetchone()
+
+        conn.commit()
 
         return jsonify({
             "success": True,
@@ -185,6 +190,8 @@ def create_wbin():
 
         cols = [c[0] for c in result.description]
         row = result.fetchone()
+
+        conn.commit()
 
         return jsonify({
             "success": True,
@@ -270,6 +277,8 @@ def create_cargo_operation():
         cols = [c[0] for c in result.description]
         row = result.fetchone()
 
+        conn.commit()
+
         return jsonify({
             "success": True,
             "message": "Cargo operation created successfully",
@@ -313,6 +322,8 @@ def update_cargo_operation(operation_id):
 
         row = result.fetchone()
         cols = [c[0] for c in result.description]
+
+        conn.commit()
 
         return jsonify({
             "success": True,
@@ -360,6 +371,8 @@ def create_wbout():
 
         cols = [c[0] for c in result.description]
         row = result.fetchone()
+
+        conn.commit()
 
         return jsonify({
             "success": True,
