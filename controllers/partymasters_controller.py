@@ -31,18 +31,25 @@ def create_partymaster():
 
         result = list(cursor.stored_results())[0]
         cols = [c[0] for c in result.description]
+        row = result.fetchone()
+
+        conn.commit()
 
         return jsonify({
             "success": True,
-            "data": _row(result.fetchone(), cols)
+            "data": _row(row, cols)
         }), 201
 
     except Exception as e:
-        return jsonify({"success": False, "message": str(e)}), 500
+        conn.rollback()
+        return jsonify({
+            "success": False,
+            "message": str(e)
+        }), 500
 
     finally:
+        cursor.close()
         conn.close()
-
 
 def get_partymasters():
     conn = get_db_connection()
@@ -99,6 +106,8 @@ def update_partymaster(partymaster_id):
 
         result = list(cursor.stored_results())[0]
         cols = [c[0] for c in result.description]
+
+        conn.commit()
 
         return jsonify({
             "success": True,
