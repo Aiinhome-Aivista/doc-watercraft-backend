@@ -116,7 +116,7 @@ def route_get_vessels(): return get_vessels()
 @token_required
 def route_create_vessel(): return create_vessel()
 
-@app.route('/api/vessels/<int:vessel_id>', methods=['POST'])
+@app.route(API + '/vessels/<int:vessel_id>', methods=['POST'])
 def update_vessel_route(vessel_id):return update_vessel(vessel_id)
 
 @app.route(API + '/vessels/<int:vessel_id>', methods=['GET'])
