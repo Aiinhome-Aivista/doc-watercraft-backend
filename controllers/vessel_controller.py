@@ -293,38 +293,19 @@ def update_vessel(vessel_id):
             vessel_id
         ))
 
-        # 2️⃣ Remove old rates (simple approach)
-        cursor.execute("DELETE FROM rate_master WHERE vessel_id = %s", (vessel_id,))
-
-        # 3️⃣ Insert new rates
-        rates = data.get("rates", [])
-
-        for r in rates:
-            cursor.execute("""
-                INSERT INTO rate_master
-                (vessel_id, activity, formula, rate, gst_rate, min_qty, max_qty, created_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
-            """, (
-                vessel_id,
-                r.get("activity"),
-                r.get("formula"),
-                r.get("rate"),
-                r.get("gst_rate"),
-                r.get("min_qty"),
-                r.get("max_qty")
-            ))
-
-        conn.commit()
+        
 
         # 4️⃣ Return Updated Data
         cursor.execute("SELECT * FROM vessels WHERE id = %s", (vessel_id,))
         cols = [c[0] for c in cursor.description]
         row = cursor.fetchone()
 
+        conn.commit()
+
         return jsonify({
             "success": True,
             "data": _vessel_row(row, cols),
-            "message": "Vessel + rates updated successfully"
+            "message": "Vessel updated successfully"
         }), 200
 
     except Exception as e:
@@ -334,6 +315,7 @@ def update_vessel(vessel_id):
     finally:
         cursor.close()
         conn.close()
+
 
 # ---------- BERTH vessel ----------
 def berth_vessel(vessel_id):
