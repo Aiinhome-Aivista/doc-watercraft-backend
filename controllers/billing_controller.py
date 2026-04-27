@@ -11,6 +11,7 @@ import math
 def ceil(x):
     return math.ceil(float(x))
 
+
 def _row(row, keys):
     d = dict(zip(keys, row))
     for k, v in d.items():
@@ -53,23 +54,31 @@ def build_context(vessel_id):
         context["mooring_start"] = vessel.get("mooring_datetime")
         context["mooring_end"] = vessel.get("sailing_datetime")
 
-        # Gatein Count
-        cursor.execute("SELECT COUNT(*) FROM gate_entries WHERE vessel_id=%s", (vessel_id,))
+        # Gate count
+        cursor.execute("""
+            SELECT COUNT(DISTINCT g.id)
+            FROM cargo_operations co
+            JOIN gate_entries g ON co.gate_entry_id = g.id
+            WHERE co.vessel_id = %s
+        """, (vessel_id,))
         context["gatein_count"] = cursor.fetchone()[0] or 0
 
-        # WBIN Count
+        # WBIN count
         cursor.execute("""
-            SELECT COUNT(*) FROM cargo_operations co
-            JOIN gate_entries g ON co.gate_entry_id = g.id
-            WHERE g.vessel_id=%s AND co.operation_type='WBIN'
+            SELECT COUNT(*)
+            FROM cargo_operations co
+            JOIN wbin_records w ON co.gate_entry_id = w.gate_entry_id
+            WHERE co.vessel_id = %s
         """, (vessel_id,))
         context["wbin_count"] = cursor.fetchone()[0] or 0
 
         # Vehicles
         cursor.execute("""
-            SELECT gate_in_datetime, gate_out_datetime
-            FROM gate_entries
-            WHERE vessel_id=%s AND gate_out_datetime IS NOT NULL
+            SELECT g.gate_in_datetime, g.gate_out_datetime
+            FROM cargo_operations co
+            JOIN gate_entries g ON co.gate_entry_id = g.id
+            WHERE co.vessel_id = %s
+            AND g.gate_out_datetime IS NOT NULL
         """, (vessel_id,))
 
         vehicles = []
@@ -140,7 +149,6 @@ def calculate_amount(row, context):
         A2 = adjust_berthing_end(end)
 
         days = ceil((A2 - A1).total_seconds() / 86400)
-
         qty = Decimal(days)
         amount = qty * rate
 
@@ -174,7 +182,7 @@ def calculate_amount(row, context):
             if r["activity"] == row["activity"] and r["formula"] == "Logic5"
         ]
 
-        slab_rate = None
+        slab_rate = rate
 
         for slab in slabs:
             min_q = Decimal(slab["min_qty"] or 0)
@@ -183,9 +191,6 @@ def calculate_amount(row, context):
             if min_q <= vessel_qty <= max_q:
                 slab_rate = Decimal(slab["rate"])
                 break
-
-        if slab_rate is None:
-            slab_rate = rate
 
         final_rate = slab_rate
         qty = Decimal(days)
@@ -211,7 +216,7 @@ def calculate_amount(row, context):
 
 
 # ===============================
-# 🔹 MAIN API
+# 🔹 MAIN API (FIXED DUPLICATES)
 # ===============================
 def generate_bill():
     data = request.get_json()
@@ -237,10 +242,20 @@ def generate_bill():
         context["all_rates"] = rates
 
         processed_logic5 = False
+        processed_activities = set()   # 🔥 FIX
 
         for r in rates:
+            activity = r["activity"]
+            formula = r["formula"]
 
-            if r["formula"] == "Logic5":
+            # 🚨 Skip duplicate activities (except Logic5)
+            if formula != "Logic5":
+                if activity in processed_activities:
+                    continue
+                processed_activities.add(activity)
+
+            # Logic5 handled once
+            if formula == "Logic5":
                 if processed_logic5:
                     continue
                 processed_logic5 = True
@@ -258,34 +273,42 @@ def generate_bill():
 
             bill_details.append({
                 "vessel_id": vessel_id,
-                "activity": r["activity"],
+                "activity": activity,
                 "qty": float(qty),
                 "rate": float(final_rate),
                 "amount": float(amount),
                 "gst_rate": float(gst_rate),
-                "gst_amount": float(gst)
+                "gst_amount": float(gst),
+                "remarks": ""
             })
 
         total_bill_value = total_base + total_gst
 
         cgst = total_gst / 2
         sgst = total_gst / 2
-        igst = 0
+        igst = Decimal(0)
+        round_off = Decimal(0)
+
+        voucher_number = f"BILL-{datetime.now().strftime('%Y%m%d%H%M%S')}"
 
         cursor.execute("""
-            INSERT INTO bill_main
-            (voucher_number, bill_date, party_id, period_start, period_end,
-             bill_base_value, cgst, sgst, igst, total_bill_value, created_at)
-            VALUES (%s, CURDATE(), %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+            INSERT INTO bill_main (
+                voucher_number, bill_date, party_id, period_start, period_end,
+                narration, bill_base_value, cgst, sgst, igst, round_off,
+                total_bill_value, created_at
+            )
+            VALUES (%s, CURDATE(), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
         """, (
-            f"BILL-{datetime.now().timestamp()}",
+            voucher_number,
             party_id,
             start_date,
             end_date,
+            "",
             float(total_base),
             float(cgst),
             float(sgst),
             float(igst),
+            float(round_off),
             float(total_bill_value)
         ))
 
@@ -293,9 +316,12 @@ def generate_bill():
 
         for d in bill_details:
             cursor.execute("""
-                INSERT INTO bill_details
-                (bill_main_id, vessel_id, activity_name, qty, rate, amount, gst_rate, gst_amount)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+                INSERT INTO bill_details (
+                    bill_main_id, vessel_id, activity_name,
+                    qty, rate, amount, remarks,
+                    gst_rate, gst_amount, created_at
+                )
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())
             """, (
                 bill_main_id,
                 d["vessel_id"],
@@ -303,6 +329,7 @@ def generate_bill():
                 d["qty"],
                 d["rate"],
                 d["amount"],
+                d["remarks"],
                 d["gst_rate"],
                 d["gst_amount"]
             ))
@@ -311,6 +338,7 @@ def generate_bill():
 
         return jsonify({
             "success": True,
+            "voucher_number": voucher_number,
             "total_base": float(total_base),
             "total_gst": float(total_gst),
             "total_bill": float(total_bill_value),
