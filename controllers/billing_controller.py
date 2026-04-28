@@ -1,4 +1,4 @@
-from flask import request, jsonify,send_file, Response
+from flask import request, jsonify, send_file, Response, url_for
 from database.db_connection import get_db_connection
 from datetime import datetime, timedelta
 from decimal import Decimal
@@ -609,12 +609,16 @@ def pdf_bill_generator():
         # 🔹 Generate PDF
         generate_invoice_pdf(result, file_path)
 
-        # 🔹 Return file
-        return send_file(
-            file_path,
-            as_attachment=False,
-            mimetype='application/pdf'
-        )
+        # 🔹 Return a downloadable link instead of streaming the PDF here
+        download_url = url_for("download_pdf_bill", filename=f"{result['voucher_number']}.pdf", _external=True)
+
+        return jsonify({
+            "success": True,
+            "message": "PDF generated successfully",
+            "voucher_number": result["voucher_number"],
+            "download_url": download_url,
+            "file_name": f"{result['voucher_number']}.pdf",
+        }), 200
 
     except Exception as e:
         print("PDF ERROR:", str(e))
@@ -623,6 +627,24 @@ def pdf_bill_generator():
     finally:
         cursor.close()
         conn.close()
+
+
+def download_bill_pdf(filename):
+    folder = "generated_pdfs"
+    file_path = os.path.join(folder, filename)
+
+    if not os.path.exists(file_path):
+        return jsonify({
+            "success": False,
+            "message": "PDF file not found"
+        }), 404
+
+    return send_file(
+        file_path,
+        as_attachment=True,
+        download_name=filename,
+        mimetype="application/pdf"
+    )
 
 
 

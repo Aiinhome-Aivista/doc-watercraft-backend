@@ -15,7 +15,7 @@ from controllers.gate_controller import (
 )
 from controllers.partymasters_controller import (get_partymaster, get_partymasters, create_partymaster, update_partymaster,delete_partymaster)
 
-from controllers.billing_controller import (get_vessels_for_billing,generate_bill,pdf_bill_generator)
+from controllers.billing_controller import (get_vessels_for_billing,generate_bill,pdf_bill_generator,download_bill_pdf)
 import os
 
 
@@ -162,6 +162,9 @@ def route_mis_report(): return get_mis_report()
 
 @app.route(API +'/pdf-bill', methods=['POST'])
 def pdf_bill():return pdf_bill_generator()
+
+@app.route(API + '/pdf-bill/<path:filename>', methods=['GET'])
+def download_pdf_bill(filename): return download_bill_pdf(filename)
 
 # ─── Gate Entry Routes ──────────────────────────────────────────
 @app.route(API + '/gate-entries', methods=['GET'])
