@@ -471,6 +471,7 @@ def get_bill_data(bill_main_id):
             "total_base": float(bm[1]),
             "cgst": float(bm[2]),
             "sgst": float(bm[3]),
+            "total_gst": float(bm[2]) + float(bm[3]),
             "total_bill": float(bm[4]),
             "period_start": str(bm[5]),
             "period_end": str(bm[6]),
