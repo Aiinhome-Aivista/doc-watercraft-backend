@@ -3,6 +3,7 @@ from database.db_connection import get_db_connection
 from datetime import datetime, timedelta
 from decimal import Decimal
 import math
+from utils.pdf_generator import generate_invoice_pdf
 
 
 # ===============================
@@ -404,3 +405,119 @@ def get_vessels_for_billing():
     finally:
         cursor.close()
         conn.close()
+
+
+
+def get_bill_data(bill_main_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        # 🔹 Bill Main + Party
+        cursor.execute("""
+            SELECT 
+                bm.voucher_number,
+                bm.bill_base_value,
+                bm.cgst,
+                bm.sgst,
+                bm.total_bill_value,
+                bm.period_start,
+                bm.period_end,
+                p.party_name
+            FROM bill_main bm
+            JOIN party_masters p ON bm.party_id = p.id
+            WHERE bm.id = %s
+        """, (bill_main_id,))
+
+        bm = cursor.fetchone()
+
+        if not bm:
+            return None
+
+        # 🔹 Bill Details + Vessel Name
+        cursor.execute("""
+            SELECT 
+                bd.vessel_id,
+                v.vessel_name,
+                bd.activity_name,
+                bd.qty,
+                bd.rate,
+                bd.amount,
+                bd.gst_rate,
+                bd.gst_amount
+            FROM bill_details bd
+            JOIN vessels v ON bd.vessel_id = v.id
+            WHERE bd.bill_main_id = %s
+        """, (bill_main_id,))
+
+        rows = cursor.fetchall()
+
+        details = []
+        for r in rows:
+            details.append({
+                "vessel_id": r[0],
+                "vessel_name": r[1],
+                "activity": r[2],
+                "qty": float(r[3]),
+                "rate": float(r[4]),
+                "amount": float(r[5]),
+                "gst_rate": float(r[6]),
+                "gst_amount": float(r[7])
+            })
+
+        return {
+            "voucher_number": bm[0],
+            "total_base": float(bm[1]),
+            "cgst": float(bm[2]),
+            "sgst": float(bm[3]),
+            "total_bill": float(bm[4]),
+            "period_start": str(bm[5]),
+            "period_end": str(bm[6]),
+            "party_name": bm[7],
+            "details": details
+        }
+
+    finally:
+        cursor.close()
+        conn.close()     
+
+
+def pdf_bill_generator():
+    data = request.get_json()
+
+    bill_main_id = data.get("bill_main_id")
+
+    if not bill_main_id:
+        return jsonify({
+            "success": False,
+            "message": "bill_main_id required"
+        }), 400
+
+    try:
+        # 🔹 Fetch data from DB
+        result = get_bill_data(bill_main_id)
+
+        if not result:
+            return jsonify({
+                "success": False,
+                "message": "Bill not found"
+            }), 404
+
+        # 🔹 File path
+        file_path = f"/tmp/{result['voucher_number']}.pdf"
+
+        # 🔹 Generate PDF
+        generate_invoice_pdf(result, file_path)
+
+        # 🔹 Return file
+        return send_file(
+            file_path,
+            as_attachment=True,
+            download_name=f"{result['voucher_number']}.pdf"
+        )
+
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": str(e)
+        }), 500           

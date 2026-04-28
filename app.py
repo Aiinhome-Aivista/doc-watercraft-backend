@@ -15,7 +15,7 @@ from controllers.gate_controller import (
 )
 from controllers.partymasters_controller import (get_partymaster, get_partymasters, create_partymaster, update_partymaster,delete_partymaster)
 
-from controllers.billing_controller import (get_vessels_for_billing,generate_bill)
+from controllers.billing_controller import (get_vessels_for_billing,generate_bill,pdf_bill_generator)
 import os
 
 
@@ -159,6 +159,9 @@ def route_vessel_billing(vessel_id, rate_id): return update_rate(vessel_id, rate
 @app.route(API + '/mis/report', methods=['GET'])
 @token_required
 def route_mis_report(): return get_mis_report()
+
+@app.route('/api/pdf-bill', methods=['POST'])
+def pdf_bill():return pdf_bill_generator()
 
 # ─── Gate Entry Routes ──────────────────────────────────────────
 @app.route(API + '/gate-entries', methods=['GET'])
