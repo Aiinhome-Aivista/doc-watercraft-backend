@@ -343,6 +343,7 @@ def generate_bill():
             "total_base": float(total_base),
             "total_gst": float(total_gst),
             "total_bill": float(total_bill_value),
+            "bill_main_id": bill_main_id,
             "details": bill_details
         })
 
