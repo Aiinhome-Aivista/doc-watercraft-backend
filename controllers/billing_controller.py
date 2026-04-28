@@ -1,4 +1,4 @@
-from flask import request, jsonify,send_file
+from flask import request, jsonify,send_file, Response
 from database.db_connection import get_db_connection
 from datetime import datetime, timedelta
 from decimal import Decimal
@@ -468,7 +468,7 @@ def get_bill_data(bill_main_id):
             })
 
         return {
-            "voucher_number": bm[0],
+            "voucher_number": bm["voucher_number"],
             "total_base": float(bm[1]),
             "cgst": float(bm[2]),
             "sgst": float(bm[3]),
@@ -589,7 +589,7 @@ def pdf_bill_generator():
 
         # 🔹 Build PDF data (no DB)
         result = {
-            "voucher_number": f"PREVIEW-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+            "voucher_number": f"INVOICE-{datetime.now().strftime('%Y%m%d%H%M%S')}",
             "party_name": party_name,
             "period_start": start_date,
             "period_end": end_date,
@@ -623,3 +623,7 @@ def pdf_bill_generator():
     finally:
         cursor.close()
         conn.close()
+
+
+
+

@@ -5,6 +5,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch, mm
 from reportlab.platypus import BaseDocTemplate, Frame, PageTemplate
 from reportlab.lib.enums import TA_LEFT, TA_RIGHT, TA_CENTER
+from io import BytesIO
 
 # ── Color Palette ─────────────────────────────────────────────────────────────
 NAVY        = colors.HexColor("#0D2137")
@@ -23,85 +24,92 @@ PAGE_W, PAGE_H = A4
 MARGIN = 22 * mm
 
 
-def _draw_page_decorations(c, doc):
-    """Draws the branded header band and footer on every page."""
-    c.saveState()
-    w, h = A4
+def _make_page_decorator(voucher_number):
+    """Returns an onPage callback that embeds the voucher number in the banner."""
+    def _draw_page_decorations(c, doc):
+        c.saveState()
+        w, h = A4
 
-    # ── Top navy banner ──────────────────────────────────────────────────────
-    banner_h = 58 * mm
-    c.setFillColor(NAVY)
-    c.rect(0, h - banner_h, w, banner_h, fill=1, stroke=0)
+        # Top navy banner
+        banner_h = 58 * mm
+        c.setFillColor(NAVY)
+        c.rect(0, h - banner_h, w, banner_h, fill=1, stroke=0)
 
-    # Diagonal accent stripe
-    c.setFillColor(colors.HexColor("#0A1B2E"))
-    p = c.beginPath()
-    p.moveTo(w * 0.56, h)
-    p.lineTo(w * 0.78, h)
-    p.lineTo(w * 0.56, h - banner_h)
-    p.close()
-    c.drawPath(p, fill=1, stroke=0)
+        # Diagonal accent stripe
+        c.setFillColor(colors.HexColor("#0A1B2E"))
+        p = c.beginPath()
+        p.moveTo(w * 0.56, h)
+        p.lineTo(w * 0.78, h)
+        p.lineTo(w * 0.56, h - banner_h)
+        p.close()
+        c.drawPath(p, fill=1, stroke=0)
 
-    # Gold accent line under banner
-    c.setStrokeColor(GOLD)
-    c.setLineWidth(2.5)
-    c.line(0, h - banner_h, w, h - banner_h)
+        # Gold accent line under banner
+        c.setStrokeColor(GOLD)
+        c.setLineWidth(2.5)
+        c.line(0, h - banner_h, w, h - banner_h)
 
-    # Company name
-    c.setFont("Helvetica-Bold", 28)
-    c.setFillColor(WHITE)
-    c.drawString(MARGIN, h - 30 * mm, "DOCK YARD")
+        # Company name
+        c.setFont("Helvetica-Bold", 28)
+        c.setFillColor(WHITE)
+        c.drawString(MARGIN, h - 30 * mm, "DOCK YARD")
 
-    # Tagline
-    c.setFont("Helvetica", 9)
-    c.setFillColor(colors.HexColor("#8BAED4"))
-    c.drawString(MARGIN, h - 39 * mm, "MARITIME SERVICES & LOGISTICS")
+        # Tagline
+        c.setFont("Helvetica", 9)
+        c.setFillColor(colors.HexColor("#8BAED4"))
+        c.drawString(MARGIN, h - 39 * mm, "MARITIME SERVICES & LOGISTICS")
 
-    # Gold divider under tagline
-    c.setStrokeColor(GOLD)
-    c.setLineWidth(1)
-    c.line(MARGIN, h - 42 * mm, MARGIN + 80 * mm, h - 42 * mm)
+        # Gold divider under tagline
+        c.setStrokeColor(GOLD)
+        c.setLineWidth(1)
+        c.line(MARGIN, h - 42 * mm, MARGIN + 80 * mm, h - 42 * mm)
 
-    # INVOICE label (right side of banner)
-    c.setFont("Helvetica-Bold", 22)
-    c.setFillColor(colors.HexColor("#8BAED4"))
-    c.drawRightString(w - MARGIN, h - 28 * mm, "INVOICE")
+        # INVOICE label (right side of banner)
+        c.setFont("Helvetica-Bold", 22)
+        c.setFillColor(colors.HexColor("#8BAED4"))
+        c.drawRightString(w - MARGIN, h - 24 * mm, "INVOICE")
 
-    c.setFont("Helvetica", 8)
-    c.setFillColor(GOLD)
-    c.drawRightString(w - MARGIN, h - 36 * mm, "VESSEL BILLING DOCUMENT")
+        # "VESSEL BILLING DOCUMENT" sub-label
+        c.setFont("Helvetica", 8)
+        c.setFillColor(GOLD)
+        c.drawRightString(w - MARGIN, h - 33 * mm, voucher_number)
 
-    # ── Footer ───────────────────────────────────────────────────────────────
-    footer_y = 14 * mm
-    c.setStrokeColor(LIGHT_GREY)
-    c.setLineWidth(0.5)
-    c.line(MARGIN, footer_y + 5 * mm, w - MARGIN, footer_y + 5 * mm)
+        # Footer
+        footer_y = 14 * mm
+        c.setStrokeColor(LIGHT_GREY)
+        c.setLineWidth(0.5)
+        c.line(MARGIN, footer_y + 5 * mm, w - MARGIN, footer_y + 5 * mm)
 
-    c.setFont("Helvetica", 7.5)
-    c.setFillColor(MID_GREY)
-    c.drawString(MARGIN, footer_y, "DOCK YARD  |  Maritime Services & Logistics")
-    c.drawRightString(w - MARGIN, footer_y, "This is a computer-generated invoice.")
+        c.setFont("Helvetica", 7.5)
+        c.setFillColor(MID_GREY)
+        c.drawString(MARGIN, footer_y, "DOCK YARD  |  Maritime Services & Logistics")
+        c.drawRightString(w - MARGIN, footer_y, "This is a computer-generated invoice.")
 
-    # Page number circle
-    pg_x = w / 2
-    c.setFillColor(NAVY)
-    c.circle(pg_x, footer_y + 2.5 * mm, 5 * mm, fill=1, stroke=0)
-    c.setFont("Helvetica-Bold", 7)
-    c.setFillColor(WHITE)
-    c.drawCentredString(pg_x, footer_y + 1 * mm, f"Page {doc.page}")
+        # Page number circle
+        pg_x = w / 2
+        c.setFillColor(NAVY)
+        c.circle(pg_x, footer_y + 2.5 * mm, 5 * mm, fill=1, stroke=0)
+        c.setFont("Helvetica-Bold", 7)
+        c.setFillColor(WHITE)
+        c.drawCentredString(pg_x, footer_y + 1 * mm, f"Page {doc.page}")
 
-    c.restoreState()
+        c.restoreState()
+    return _draw_page_decorations
 
 
-def generate_invoice_pdf(data, file_path):
-    # BaseDocTemplate enables the onPage callback for header/footer painting
+def generate_invoice_pdf(data, file_path=None):
+    """
+    Returns BytesIO when file_path is None (view only, nothing saved).
+    Saves to disk when file_path is a string path.
+    """
+    buffer = BytesIO() if file_path is None else file_path
     doc = BaseDocTemplate(
-        file_path, pagesize=A4,
+        buffer, pagesize=A4,
         rightMargin=MARGIN, leftMargin=MARGIN,
         topMargin=70 * mm, bottomMargin=28 * mm
     )
     frame = Frame(MARGIN, 28 * mm, PAGE_W - 2 * MARGIN, PAGE_H - 70 * mm - 28 * mm, id='main')
-    template = PageTemplate(id='main', frames=[frame], onPage=_draw_page_decorations)
+    template = PageTemplate(id='main', frames=[frame], onPage=_make_page_decorator(data['voucher_number']))
     doc.addPageTemplates([template])
 
     styles = getSampleStyleSheet()
@@ -251,3 +259,45 @@ def generate_invoice_pdf(data, file_path):
     elements.append(sig_table)
 
     doc.build(elements)
+
+    if file_path is None:
+        buffer.seek(0)
+        return buffer
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# USAGE EXAMPLES
+# ──────────────────────────────────────────────────────────────────────────────
+#
+# ✅ Flask — view in browser (no download popup):
+#
+#   from flask import Flask, Response
+#   app = Flask(__name__)
+#
+#   @app.route("/invoice/<voucher_no>")
+#   def invoice(voucher_no):
+#       data = fetch_data_from_db(voucher_no)   # your DB call
+#       pdf = generate_invoice_pdf(data)
+#       return Response(
+#           pdf,
+#           mimetype="application/pdf",
+#           headers={"Content-Disposition": "inline; filename=invoice.pdf"}
+#       )
+#
+# ✅ Django — view in browser:
+#
+#   from django.http import HttpResponse
+#
+#   def invoice_view(request, voucher_no):
+#       data = fetch_data(voucher_no)
+#       pdf = generate_invoice_pdf(data)
+#       response = HttpResponse(pdf, content_type="application/pdf")
+#       response["Content-Disposition"] = 'inline; filename="invoice.pdf"'
+#       return response
+#
+# ✅ Save to disk:
+#   generate_invoice_pdf(data, "/path/to/invoice.pdf")
+#
+# KEY: "inline" (not "attachment") is what tells the browser to DISPLAY, not download.
+# ──────────────────────────────────────────────────────────────────────────────
+
