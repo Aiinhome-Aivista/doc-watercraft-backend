@@ -612,8 +612,8 @@ def pdf_bill_generator():
         # 🔹 Return file
         return send_file(
             file_path,
-            as_attachment=True,
-            download_name=f"{result['voucher_number']}.pdf"
+            as_attachment=False,
+            mimetype='application/pdf'
         )
 
     except Exception as e:
