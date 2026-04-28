@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 import math
 from utils.pdf_generator import generate_invoice_pdf
+import os
 
 
 # ===============================
@@ -484,29 +485,126 @@ def get_bill_data(bill_main_id):
         conn.close()     
 
 
+
 def pdf_bill_generator():
     data = request.get_json()
 
-    bill_main_id = data.get("bill_main_id")
+    party_id = data.get("party_id")
+    vessel_ids = data.get("vessel_ids") or []
+    start_date = data.get("period_start")
+    end_date = data.get("period_end")
 
-    if not bill_main_id:
+    if not party_id or not vessel_ids:
         return jsonify({
             "success": False,
-            "message": "bill_main_id required"
+            "message": "party_id and vessel_ids required"
         }), 400
 
-    try:
-        # 🔹 Fetch data from DB
-        result = get_bill_data(bill_main_id)
+    conn = get_db_connection()
+    cursor = conn.cursor()
 
-        if not result:
+    try:
+        # 🔹 Validate all vessels belong to same party
+        placeholders = ','.join(['%s'] * len(vessel_ids))
+
+        query = f"""
+            SELECT COUNT(DISTINCT party_id)
+            FROM vessels
+            WHERE id IN ({placeholders})
+        """
+
+        cursor.execute(query, vessel_ids)
+
+        if cursor.fetchone()[0] > 1:
             return jsonify({
                 "success": False,
-                "message": "Bill not found"
-            }), 404
+                "message": "Selected vessels belong to different parties"
+            }), 400
 
-        # 🔹 File path
-        file_path = f"/tmp/{result['voucher_number']}.pdf"
+        # 🔹 Get party name
+        cursor.execute("SELECT party_name FROM party_masters WHERE id=%s", (party_id,))
+        p = cursor.fetchone()
+        party_name = p[0] if p else ""
+
+        total_base = Decimal(0)
+        total_gst = Decimal(0)
+        details = []
+
+        # 🔹 Loop selected vessels only
+        for vessel_id in vessel_ids:
+
+            context = build_context(vessel_id)
+            rates = fetch_rates(vessel_id)
+            context["all_rates"] = rates
+
+            processed_logic5 = False
+            processed_activities = set()
+
+            for r in rates:
+                activity = r["activity"]
+                formula = r["formula"]
+
+                if formula != "Logic5":
+                    if activity in processed_activities:
+                        continue
+                    processed_activities.add(activity)
+
+                if formula == "Logic5":
+                    if processed_logic5:
+                        continue
+                    processed_logic5 = True
+
+                qty, amount, final_rate = calculate_amount(r, context)
+
+                if qty == 0 or amount == 0:
+                    continue
+
+                gst_rate = Decimal(r["gst_rate"])
+                gst = (amount * gst_rate) / Decimal(100)
+
+                total_base += amount
+                total_gst += gst
+
+                # 🔹 Get vessel name
+                cursor.execute("SELECT vessel_name FROM vessels WHERE id=%s", (vessel_id,))
+                vn = cursor.fetchone()
+                vessel_name = vn[0] if vn else f"Vessel {vessel_id}"
+
+                details.append({
+                    "vessel_id": vessel_id,
+                    "vessel_name": vessel_name,
+                    "activity": activity,
+                    "qty": float(qty),
+                    "rate": float(final_rate),
+                    "amount": float(amount),
+                    "gst_rate": float(gst_rate),
+                    "gst_amount": float(gst)
+                })
+
+        if not details:
+            return jsonify({
+                "success": False,
+                "message": "No billable data found"
+            }), 400
+
+        # 🔹 Build PDF data (no DB)
+        result = {
+            "voucher_number": f"PREVIEW-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+            "party_name": party_name,
+            "period_start": start_date,
+            "period_end": end_date,
+            "total_base": float(total_base),
+            "cgst": float(total_gst / 2),
+            "sgst": float(total_gst / 2),
+            "total_bill": float(total_base + total_gst),
+            "details": details
+        }
+
+        # 🔥 File path (cross-platform)
+        folder = "generated_pdfs"
+        os.makedirs(folder, exist_ok=True)
+
+        file_path = os.path.join(folder, f"{result['voucher_number']}.pdf")
 
         # 🔹 Generate PDF
         generate_invoice_pdf(result, file_path)
@@ -519,7 +617,9 @@ def pdf_bill_generator():
         )
 
     except Exception as e:
-        return jsonify({
-            "success": False,
-            "message": str(e)
-        }), 500           
+        print("PDF ERROR:", str(e))
+        return jsonify({"success": False, "message": str(e)}), 500
+
+    finally:
+        cursor.close()
+        conn.close()

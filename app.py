@@ -161,7 +161,6 @@ def route_vessel_billing(vessel_id, rate_id): return update_rate(vessel_id, rate
 def route_mis_report(): return get_mis_report()
 
 @app.route(API +'/pdf-bill', methods=['POST'])
-@token_required
 def pdf_bill():return pdf_bill_generator()
 
 # ─── Gate Entry Routes ──────────────────────────────────────────
