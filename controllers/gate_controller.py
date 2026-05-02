@@ -14,6 +14,8 @@ def _row(row, keys):
 # ---------- GET all gate entries ----------
 def get_gate_entries():
     vessel_id = request.args.get("vessel_id")
+    vehicle_id = request.args.get("vehicle_id")   # ✅ NEW
+    party_id = request.args.get("party_id")       # ✅ NEW
     status = request.args.get("status")
 
     # pagination
@@ -35,20 +37,23 @@ def get_gate_entries():
             )
         )
 
-        # ======================
-        # FIRST RESULT (COUNT)
-        # ======================
         result_sets = list(cursor.stored_results())
 
+        # ✅ COUNT
         count_result = result_sets[0].fetchone()
         total = count_result[0] if count_result else 0
 
-        # ======================
-        # SECOND RESULT (DATA)
-        # ======================
+        # ✅ DATA
         data_result = result_sets[1]
         cols = [c[0] for c in data_result.description]
         rows = [_row(r, cols) for r in data_result.fetchall()]
+
+        # ✅ OPTIONAL FILTERS (post-filtering if needed)
+        if vehicle_id:
+            rows = [r for r in rows if r.get("vehicle_id") == int(vehicle_id)]
+
+        if party_id:
+            rows = [r for r in rows if r.get("party_id") == int(party_id)]
 
         return jsonify({
             "success": True,
@@ -61,15 +66,21 @@ def get_gate_entries():
             }
         }), 200
 
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": str(e)
+        }), 500
+
     finally:
         cursor.close()
         conn.close()
-
 # ---------- CREATE gate entry ----------
 def create_gate_entry():
     data = request.get_json()
 
-    required = ["consignor_name", "challan_invoice_no", "vehicle_id", "gate_in_datetime"]
+    # ✅ Updated required fields
+    required = ["party_id", "challan_invoice_no", "vehicle_id", "gate_in_datetime"]
     missing = [f for f in required if not data.get(f)]
 
     if missing:
@@ -82,13 +93,15 @@ def create_gate_entry():
     cursor = conn.cursor()
 
     try:
+        # ✅ Call updated stored procedure
         cursor.callproc("sp_create_gate_entry", (
-            data["consignor_name"],
+            data["party_id"],
             data["challan_invoice_no"],
             data["vehicle_id"],
             data["gate_in_datetime"],
             data.get("weighment_slip_no"),
             data.get("outside_payment_slip"),
+            data.get("outside_weight"),   # ✅ NEW
             int(data.get("own_weighbridge", 0)),
             data.get("direction")
         ))
@@ -116,7 +129,6 @@ def create_gate_entry():
     finally:
         cursor.close()
         conn.close()
-
 # ---------- Gate Out ----------
 def gate_out(gate_id):
     data = request.get_json()
