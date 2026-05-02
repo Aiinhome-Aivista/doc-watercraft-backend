@@ -14,8 +14,8 @@ def _row(row, keys):
 # ---------- GET all gate entries ----------
 def get_gate_entries():
     vessel_id = request.args.get("vessel_id")
-    vehicle_id = request.args.get("vehicle_id")   # ✅ NEW
-    party_id = request.args.get("party_id")       # ✅ NEW
+    vehicle_id = request.args.get("vehicle_id") 
+    party_id = request.args.get("party_id")       
     status = request.args.get("status")
 
     # pagination
