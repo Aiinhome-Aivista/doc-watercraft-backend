@@ -44,27 +44,39 @@ def export_full_report():
         # ================= QUERY =================
         query = f"""
         SELECT 
-            v.vessel_name,
-            pm.party_name,
-            ge.gate_in_datetime,
-            ge.gate_out_datetime,
-            ge.gate_in_no,
+    v.vessel_name,
+    pm.party_name,
 
-            vm.vehicle_no,
+    ge.gate_in_datetime,
+    ge.gate_out_datetime,
+    vm.vehicle_no,
 
-            wr.gross_weight,
-            wr.tare_weight,
-            (wr.gross_weight - wr.tare_weight) AS net_weight,
+    wr.gross_weight,
+    wr.tare_weight,
+    (wr.gross_weight - wr.tare_weight) AS net_weight,
 
-            co.start_datetime,
-            co.end_datetime
+    co.start_datetime,
+    co.end_datetime,
 
-        FROM vessels v
-        LEFT JOIN party_masters pm ON pm.id = v.party_id
-        LEFT JOIN gate_entries ge ON ge.party_id = v.party_id
-        LEFT JOIN vehicle_master vm ON vm.id = ge.vehicle_id
-        LEFT JOIN wbin_records wr ON wr.gate_entry_id = ge.id
-        LEFT JOIN cargo_operations co ON co.vessel_id = v.id
+    -- BILLING
+    bm.voucher_number,
+    bm.bill_date,
+    bm.total_bill_value,
+
+    bd.activity_name,
+    bd.qty,
+    bd.rate,
+    bd.amount,
+    bd.gst_amount
+
+FROM vessels v
+LEFT JOIN party_masters pm ON pm.id = v.party_id
+LEFT JOIN gate_entries ge ON ge.party_id = v.party_id
+LEFT JOIN vehicle_master vm ON vm.id = ge.vehicle_id
+LEFT JOIN wbin_records wr ON wr.gate_entry_id = ge.id
+LEFT JOIN cargo_operations co ON co.vessel_id = v.id
+LEFT JOIN bill_details bd ON bd.vessel_id = v.id
+LEFT JOIN bill_main bm ON bm.id = bd.bill_main_id
         {where}
         """
 
@@ -72,18 +84,27 @@ def export_full_report():
 
         # ================= COLUMN RENAME =================
         df.columns = [
-            "Vessel",
-            "Party",
-            "Gate In",
-            "Gate Out",
-            "Gate No",
-            "Vehicle",
-            "Gross",
-            "Tare",
-            "Net",
-            "Start",
-            "End"
-        ]
+    "Vessel",
+    "Party",
+    "Gate In",
+    "Gate Out",
+    "Vehicle",
+    "Gross",
+    "Tare",
+    "Net",
+    "Start",
+    "End",
+
+    # BILLING
+    "Voucher",
+    "Bill Date",
+    "Total Bill",
+    "Activity",
+    "Qty",
+    "Rate",
+    "Amount",
+    "GST"
+]
 
         # ================= FILE =================
         file_name = f"REPORT_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
