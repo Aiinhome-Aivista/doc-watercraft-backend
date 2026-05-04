@@ -3,7 +3,7 @@ import pandas as pd
 from datetime import datetime
 import os
 
-from app.db import get_db_connection
+from database.db_connection import get_db_connection
 
 EXPORT_FOLDER = "exports"
 os.makedirs(EXPORT_FOLDER, exist_ok=True)
