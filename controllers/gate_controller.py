@@ -96,13 +96,13 @@ def create_gate_entry():
         # ✅ Call updated stored procedure
         cursor.callproc("sp_create_gate_entry", (
             data["party_id"],
-            data["challan_invoice_no"],
             data["vehicle_id"],
-            data["gate_in_datetime"],
+            data["challan_invoice_no"],
             data.get("weighment_slip_no"),
             data.get("outside_payment_slip"),
-            data.get("outside_weight"),   # ✅ NEW
+            data.get("outside_weight"),
             int(data.get("own_weighbridge", 0)),
+            data["gate_in_datetime"],
             data.get("direction")
         ))
 
@@ -129,6 +129,7 @@ def create_gate_entry():
     finally:
         cursor.close()
         conn.close()
+
 # ---------- Gate Out ----------
 def gate_out(gate_id):
     data = request.get_json()
