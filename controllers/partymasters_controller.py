@@ -26,7 +26,9 @@ def create_partymaster():
             data.get("country"),
             data.get("pincode"),
             json.dumps(data.get("mobiles")) if data.get("mobiles") else None,
-            json.dumps(data.get("emails")) if data.get("emails") else None
+            json.dumps(data.get("emails")) if data.get("emails") else None,
+            data.get("pan_number"),
+            data.get("gst_number")
         ))
 
         result = list(cursor.stored_results())[0]
@@ -101,7 +103,9 @@ def update_partymaster(partymaster_id):
             data.get("country"),
             data.get("pincode"),
             json.dumps(data.get("mobiles")) if data.get("mobiles") else None,
-            json.dumps(data.get("emails")) if data.get("emails") else None
+            json.dumps(data.get("emails")) if data.get("emails") else None,
+            data.get("pan_number"),
+            data.get("gst_number")
         ))
 
         result = list(cursor.stored_results())[0]

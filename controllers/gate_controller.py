@@ -100,7 +100,8 @@ def create_gate_entry():
             data["challan_invoice_no"],
             data.get("weighment_slip_no"),
             data.get("outside_payment_slip"),
-            data.get("outside_weight"),
+            data.get("outside_gross_weight"),
+            data.get("outside_tare_weight"),
             int(data.get("own_weighbridge", 0)),
             data["gate_in_datetime"],
             data.get("direction")
