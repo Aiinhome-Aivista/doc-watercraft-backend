@@ -11,7 +11,8 @@ from controllers.vessel_controller import (
 )
 from controllers.gate_controller import (
     get_gate_entries, create_gate_entry, gate_out,
-    create_wbin, create_cargo_operation,update_cargo_operation,create_wbout, get_weighments,get_cargo_operation
+    create_wbin, create_cargo_operation,update_cargo_operation,create_wbout, get_weighments,get_cargo_operation,
+    update_gate_entry
 )
 from controllers.partymasters_controller import (get_partymaster, get_partymasters, create_partymaster, update_partymaster,delete_partymaster)
 
@@ -175,6 +176,10 @@ def route_get_gate_entries(): return get_gate_entries()
 @app.route(API + '/gate-entries', methods=['POST'])
 @token_required
 def route_create_gate_entry(): return create_gate_entry()
+
+@app.route(API + '/gate-entries/<int:gate_id>', methods=['PUT'])
+@token_required
+def route_update_gate_entry(gate_id): return update_gate_entry(gate_id)
 
 @app.route(API + '/gate-entries/<int:gate_id>/gate-out', methods=['POST'])
 @token_required
