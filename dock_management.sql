@@ -450,4 +450,39 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
+--
+-- Temporary view structure for view `v_vessel_billing`
+--
+
+DROP TABLE IF EXISTS `v_vessel_billing`;
+/*!50001 DROP VIEW IF EXISTS `v_vessel_billing`*/;
+/*!50001 CREATE VIEW `v_vessel_billing` AS 
+SELECT 
+    v.id AS vessel_id,
+    v.vessel_auto_id,
+    v.vessel_name,
+    v.party_id,
+    pm.party_name,
+    v.cargo_type,
+    v.quantity,
+    v.direction,
+    v.status,
+    v.expected_date,
+    v.berthing_datetime,
+    v.mooring_datetime,
+    v.survey_quantity,
+    v.survey_datetime,
+    v.sailing_datetime,
+    COALESCE(SUM(bd.amount), 0) AS total_base_amount,
+    COALESCE(SUM(bd.gst_amount), 0) AS total_gst_amount,
+    COALESCE(SUM(bd.amount + bd.gst_amount), 0) AS grand_total_amount,
+    CASE 
+        WHEN SUM(bd.amount) > 0 THEN 'BILLED'
+        ELSE 'PENDING'
+    END AS billing_status
+FROM vessels v
+LEFT JOIN party_masters pm ON v.party_id = pm.id
+LEFT JOIN bill_details bd ON v.id = bd.vessel_id
+GROUP BY v.id, pm.party_name */;
+
 -- Dump completed on 2026-06-08 14:45:52
