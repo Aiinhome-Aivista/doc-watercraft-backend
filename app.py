@@ -7,12 +7,13 @@ from controllers.vehicle_controller import (create_vehicle, get_vehicles, get_ve
 from controllers.vessel_controller import (
     get_vessels, get_vessel, create_vessel,
     berth_vessel, moor_vessel, survey_vessel, unberth_vessel,
-    get_vessel_billing, get_mis_report,get_rates_by_vessel,update_rate,update_vessel
+    get_vessel_billing, get_mis_report,get_rates_by_vessel,update_rate,update_vessel,
+    get_vessel_names
 )
 from controllers.gate_controller import (
     get_gate_entries, create_gate_entry, gate_out,
     create_wbin, create_cargo_operation,update_cargo_operation,create_wbout, get_weighments,get_cargo_operation,
-    update_gate_entry
+    update_gate_entry, get_gate_in_numbers
 )
 from controllers.partymasters_controller import (get_partymaster, get_partymasters, create_partymaster, update_partymaster,delete_partymaster)
 
@@ -114,6 +115,10 @@ def toggle_vehicle(vehicle_id):return toggle_vehicle_status(vehicle_id)
 @token_required
 def route_get_vessels(): return get_vessels()
 
+@app.route(API + '/vessels/names', methods=['GET'])
+@token_required
+def route_get_vessel_names(): return get_vessel_names()
+
 @app.route(API + '/vessels', methods=['POST'])
 @token_required
 def route_create_vessel(): return create_vessel()
@@ -172,6 +177,10 @@ def download_pdf_bill(filename): return download_bill_pdf(filename)
 @app.route(API + '/gate-entries', methods=['GET'])
 @token_required
 def route_get_gate_entries(): return get_gate_entries()
+
+@app.route(API + '/gate-entries/nos', methods=['GET'])
+@token_required
+def route_get_gate_in_numbers(): return get_gate_in_numbers()
 
 @app.route(API + '/gate-entries', methods=['POST'])
 @token_required

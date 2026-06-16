@@ -52,6 +52,10 @@ def _vessel_row(row, keys):
 #         conn.close()
 def get_vessels():
     status_filter = request.args.get("status")
+    vessel_name = request.args.get("vessel_name")
+    start_date = request.args.get("start_date")
+    end_date = request.args.get("end_date")
+    sort_order = request.args.get("sort", "latest")
 
     page = int(request.args.get("page", 1))
     per_page = int(request.args.get("per_page", 10))
@@ -66,27 +70,51 @@ def get_vessels():
             LEFT JOIN party_masters p ON v.party_id = p.id
         """
 
+        conditions = []
         params = []
 
         if status_filter:
-            base_query += " WHERE v.status = %s"
+            conditions.append("v.status = %s")
             params.append(status_filter)
+
+        if vessel_name:
+            conditions.append("v.vessel_name = %s")
+            params.append(vessel_name)
+
+        if start_date and end_date:
+            conditions.append("( (DATE(v.created_at) BETWEEN %s AND %s) OR (DATE(v.berthing_datetime) BETWEEN %s AND %s) )")
+            params.extend([start_date, end_date, start_date, end_date])
+        elif start_date:
+            conditions.append("(DATE(v.created_at) >= %s OR DATE(v.berthing_datetime) >= %s)")
+            params.extend([start_date, start_date])
+        elif end_date:
+            conditions.append("(DATE(v.created_at) <= %s OR DATE(v.berthing_datetime) <= %s)")
+            params.extend([end_date, end_date])
+
+        if conditions:
+            base_query += " WHERE " + " AND ".join(conditions)
 
         # total count
         count_query = "SELECT COUNT(*) " + base_query
         cursor.execute(count_query, tuple(params))
         total = cursor.fetchone()[0]
 
+        # order clause
+        order_clause = "ORDER BY v.created_at DESC"
+        if sort_order == "oldest":
+            order_clause = "ORDER BY v.created_at ASC"
+
         # data query
-        data_query = """
+        data_query = f"""
             SELECT v.*, p.party_name
-        """ + base_query + """
-            ORDER BY v.created_at DESC
+            {base_query}
+            {order_clause}
             LIMIT %s OFFSET %s
         """
 
-        params.extend([per_page, offset])
-        cursor.execute(data_query, tuple(params))
+        data_params = list(params)
+        data_params.extend([per_page, offset])
+        cursor.execute(data_query, tuple(data_params))
 
         cols = [c[0] for c in cursor.description]
         rows = [_vessel_row(r, cols) for r in cursor.fetchall()]
@@ -102,9 +130,40 @@ def get_vessels():
             }
         }), 200
 
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": str(e)
+        }), 500
+
     finally:
         cursor.close()
         conn.close()
+
+# ---------- GET all unique vessel names ----------
+def get_vessel_names():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute("SELECT DISTINCT vessel_name FROM vessels WHERE vessel_name IS NOT NULL AND vessel_name != '' ORDER BY vessel_name")
+        rows = [r[0] for r in cursor.fetchall()]
+
+        return jsonify({
+            "success": True,
+            "data": rows
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": str(e)
+        }), 500
+
+    finally:
+        cursor.close()
+        conn.close()
+
 
 # ---------- GET single vessel ----------
 def get_vessel(vessel_id):

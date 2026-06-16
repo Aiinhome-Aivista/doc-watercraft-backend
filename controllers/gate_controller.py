@@ -17,6 +17,11 @@ def get_gate_entries():
     vehicle_id = request.args.get("vehicle_id") 
     party_id = request.args.get("party_id")       
     status = request.args.get("status")
+    gate_in_no = request.args.get("gate_in_no")
+    vehicle_no = request.args.get("vehicle_no")
+    start_date = request.args.get("start_date")
+    end_date = request.args.get("end_date")
+    sort_order = request.args.get("sort", "latest")
 
     # pagination
     page = int(request.args.get("page", 1))
@@ -27,33 +32,108 @@ def get_gate_entries():
     cursor = conn.cursor()
 
     try:
-        cursor.callproc(
-            "sp_get_gate_entries",
-            (
-                int(vessel_id) if vessel_id else None,
-                status if status else None,
-                per_page,
-                offset
+        base_query = """
+            FROM gate_entries ge
+            LEFT JOIN party_masters pm ON pm.id = ge.party_id
+            LEFT JOIN vehicle_master vm ON vm.id = ge.vehicle_id
+            LEFT JOIN cargo_operations co ON co.id = (
+                SELECT c2.id FROM cargo_operations c2 WHERE c2.gate_entry_id = ge.id ORDER BY c2.id DESC LIMIT 1
             )
-        )
+            LEFT JOIN vessels v ON v.id = co.vessel_id
+        """
 
-        result_sets = list(cursor.stored_results())
+        conditions = []
+        params = []
 
-        # ✅ COUNT
-        count_result = result_sets[0].fetchone()
-        total = count_result[0] if count_result else 0
+        if vessel_id:
+            conditions.append("co.vessel_id = %s")
+            params.append(vessel_id)
 
-        # ✅ DATA
-        data_result = result_sets[1]
-        cols = [c[0] for c in data_result.description]
-        rows = [_row(r, cols) for r in data_result.fetchall()]
-
-        # ✅ OPTIONAL FILTERS (post-filtering if needed)
         if vehicle_id:
-            rows = [r for r in rows if r.get("vehicle_id") == int(vehicle_id)]
+            conditions.append("ge.vehicle_id = %s")
+            params.append(vehicle_id)
 
         if party_id:
-            rows = [r for r in rows if r.get("party_id") == int(party_id)]
+            conditions.append("ge.party_id = %s")
+            params.append(party_id)
+
+        if status:
+            if status == "LOADING/UNLOADING" or status == "UNLOADING" or status == "LOADING":
+                conditions.append("ge.status IN ('LOADING', 'UNLOADING')")
+            else:
+                conditions.append("ge.status = %s")
+                params.append(status)
+
+        if gate_in_no:
+            conditions.append("ge.gate_in_no = %s")
+            params.append(gate_in_no)
+
+        if vehicle_no:
+            conditions.append("vm.vehicle_no LIKE %s")
+            params.append(f"%{vehicle_no}%")
+
+        if start_date and end_date:
+            conditions.append("DATE(ge.gate_in_datetime) BETWEEN %s AND %s")
+            params.extend([start_date, end_date])
+        elif start_date:
+            conditions.append("DATE(ge.gate_in_datetime) >= %s")
+            params.append(start_date)
+        elif end_date:
+            conditions.append("DATE(ge.gate_in_datetime) <= %s")
+            params.append(end_date)
+
+        if conditions:
+            base_query += " WHERE " + " AND ".join(conditions)
+
+        # total count
+        count_query = "SELECT COUNT(*) " + base_query
+        cursor.execute(count_query, tuple(params))
+        total = cursor.fetchone()[0]
+
+        # order clause
+        order_clause = "ORDER BY ge.gate_in_datetime DESC"
+        if sort_order == "oldest":
+            order_clause = "ORDER BY ge.gate_in_datetime ASC"
+
+        # data query
+        data_query = f"""
+            SELECT 
+                ge.id,
+                ge.gate_in_no,
+                ge.gate_in_datetime,
+                ge.party_id,
+                ge.vehicle_id,
+                ge.challan_invoice_no,
+                ge.weighment_slip_no,
+                ge.outside_payment_slip,
+                ge.outside_gross_weight,
+                ge.outside_tare_weight,
+                ge.outside_net_weight,
+                ge.own_weighbridge,
+                ge.status,
+                ge.direction,
+                ge.gate_out_datetime,
+                ge.created_at,
+                ge.updated_at,
+                pm.party_name,
+                pm.party_code,
+                vm.vehicle_no,
+                vm.transporter_name,
+                v.id AS vessel_id,
+                v.vessel_name,
+                co.id AS cargo_operation_id,
+                co.compressor_no
+            {base_query}
+            {order_clause}
+            LIMIT %s OFFSET %s
+        """
+
+        data_params = list(params)
+        data_params.extend([per_page, offset])
+        cursor.execute(data_query, tuple(data_params))
+
+        cols = [c[0] for c in cursor.description]
+        rows = [_row(r, cols) for r in cursor.fetchall()]
 
         return jsonify({
             "success": True,
@@ -64,6 +144,30 @@ def get_gate_entries():
                 "total": total,
                 "total_pages": (total + per_page - 1) // per_page
             }
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": str(e)
+        }), 500
+
+    finally:
+        cursor.close()
+        conn.close()
+
+# ---------- GET all unique gate-in numbers ----------
+def get_gate_in_numbers():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute("SELECT DISTINCT gate_in_no FROM gate_entries WHERE gate_in_no IS NOT NULL AND gate_in_no != '' ORDER BY gate_in_no DESC")
+        rows = [r[0] for r in cursor.fetchall()]
+
+        return jsonify({
+            "success": True,
+            "data": rows
         }), 200
 
     except Exception as e:
