@@ -113,6 +113,8 @@ def get_gate_entries():
                 ge.status,
                 ge.direction,
                 ge.gate_out_datetime,
+                ge.driver_name,
+                ge.driver_mob_no,
                 ge.created_at,
                 ge.updated_at,
                 pm.party_name,
@@ -208,7 +210,9 @@ def create_gate_entry():
             data.get("outside_tare_weight"),
             int(data.get("own_weighbridge", 0)),
             data["gate_in_datetime"],
-            data.get("direction")
+            data.get("direction"),
+            data.get("driver_name"),
+            data.get("driver_mob_no")
         ))
 
         result = list(cursor.stored_results())[0]
@@ -578,6 +582,8 @@ def update_gate_entry(gate_id):
                 direction = %s,
                 status = %s,
                 gate_out_datetime = %s,
+                driver_name = %s,
+                driver_mob_no = %s,
                 updated_at = NOW()
             WHERE id = %s
         """
@@ -594,6 +600,8 @@ def update_gate_entry(gate_id):
         direction = data.get("direction")
         status = data.get("status")
         gate_out_datetime = data.get("gate_out_datetime") or None
+        driver_name = data.get("driver_name")
+        driver_mob_no = data.get("driver_mob_no")
 
         cursor.execute(query, (
             party_id,
@@ -608,6 +616,8 @@ def update_gate_entry(gate_id):
             direction,
             status,
             gate_out_datetime,
+            driver_name,
+            driver_mob_no,
             gate_id
         ))
 
@@ -658,6 +668,8 @@ def update_gate_entry(gate_id):
                 ge.status,
                 ge.direction,
                 ge.gate_out_datetime,
+                ge.driver_name,
+                ge.driver_mob_no,
                 ge.created_at,
                 ge.updated_at,
                 pm.party_name,
