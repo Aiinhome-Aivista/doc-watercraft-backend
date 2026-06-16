@@ -647,5 +647,146 @@ def download_bill_pdf(filename):
     )
 
 
+def get_all_bills():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute("""
+            SELECT 
+                bm.id,
+                bm.voucher_number,
+                bm.bill_date,
+                pm.party_name,
+                bm.period_start,
+                bm.period_end,
+                bm.narration,
+                bm.bill_base_value,
+                bm.cgst,
+                bm.sgst,
+                bm.igst,
+                bm.round_off,
+                bm.total_bill_value,
+                bm.created_at
+            FROM bill_main bm
+            LEFT JOIN party_masters pm ON bm.party_id = pm.id
+            ORDER BY bm.created_at DESC
+        """)
+
+        cols = [
+            "id", "voucher_number", "bill_date", "party_name",
+            "period_start", "period_end", "narration", "bill_base_value",
+            "cgst", "sgst", "igst", "round_off", "total_bill_value", "created_at"
+        ]
+        
+        rows = cursor.fetchall()
+        bills = []
+        for r in rows:
+            d = dict(zip(cols, r))
+            for k, v in d.items():
+                if isinstance(v, datetime):
+                    d[k] = v.strftime("%Y-%m-%d %H:%M:%S")
+                elif hasattr(v, 'strftime'): # handles date objects like bill_date
+                    d[k] = v.strftime("%Y-%m-%d")
+                elif isinstance(v, Decimal):
+                    d[k] = float(v)
+            bills.append(d)
+
+        return jsonify({
+            "success": True,
+            "data": bills
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": str(e)
+        }), 500
+
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def update_bill(bill_id):
+    data = request.get_json()
+
+    narration = data.get("narration", "")
+    bill_base_value = data.get("bill_base_value")
+    cgst = data.get("cgst")
+    sgst = data.get("sgst")
+    igst = data.get("igst")
+    round_off = data.get("round_off")
+    total_bill_value = data.get("total_bill_value")
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute("SELECT id FROM bill_main WHERE id = %s", (bill_id,))
+        if not cursor.fetchone():
+            return jsonify({"success": False, "message": "Bill not found"}), 404
+
+        cursor.execute("""
+            UPDATE bill_main
+            SET narration = %s,
+                bill_base_value = %s,
+                cgst = %s,
+                sgst = %s,
+                igst = %s,
+                round_off = %s,
+                total_bill_value = %s,
+                updated_at = NOW()
+            WHERE id = %s
+        """, (
+            narration,
+            float(bill_base_value) if bill_base_value is not None else 0.0,
+            float(cgst) if cgst is not None else 0.0,
+            float(sgst) if sgst is not None else 0.0,
+            float(igst) if igst is not None else 0.0,
+            float(round_off) if round_off is not None else 0.0,
+            float(total_bill_value) if total_bill_value is not None else 0.0,
+            bill_id
+        ))
+
+        conn.commit()
+        return jsonify({"success": True, "message": "Bill updated successfully"}), 200
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "message": str(e)}), 500
+
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def delete_bill(bill_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute("SELECT id FROM bill_main WHERE id = %s", (bill_id,))
+        if not cursor.fetchone():
+            return jsonify({"success": False, "message": "Bill not found"}), 404
+
+        # Delete details first
+        cursor.execute("DELETE FROM bill_details WHERE bill_main_id = %s", (bill_id,))
+        
+        # Delete main bill
+        cursor.execute("DELETE FROM bill_main WHERE id = %s", (bill_id,))
+
+        conn.commit()
+        return jsonify({"success": True, "message": "Bill deleted successfully"}), 200
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "message": str(e)}), 500
+
+    finally:
+        cursor.close()
+        conn.close()
+
+
 
 
