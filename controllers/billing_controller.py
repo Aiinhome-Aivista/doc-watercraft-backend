@@ -690,6 +690,29 @@ def get_all_bills():
                     d[k] = v.strftime("%Y-%m-%d")
                 elif isinstance(v, Decimal):
                     d[k] = float(v)
+            
+            # Fetch details for this bill
+            cursor.execute("""
+                SELECT 
+                    bd.activity_name, bd.amount, bd.gst_amount, bd.gst_rate, bd.qty, bd.rate, bd.remarks, bd.vessel_id, v.vessel_name
+                FROM bill_details bd
+                LEFT JOIN vessels v ON bd.vessel_id = v.id
+                WHERE bd.bill_main_id = %s
+            """, (d["id"],))
+            
+            detail_cols = ["activity", "amount", "gst_amount", "gst_rate", "qty", "rate", "remarks", "vessel_id", "vessel_name"]
+            detail_rows = cursor.fetchall()
+            details = []
+            for dr in detail_rows:
+                dd = dict(zip(detail_cols, dr))
+                for dk, dv in dd.items():
+                    if isinstance(dv, Decimal):
+                        dd[dk] = float(dv)
+                    elif dv is None and dk in ["remarks", "vessel_name"]:
+                        dd[dk] = ""
+                details.append(dd)
+            
+            d["details"] = details
             bills.append(d)
 
         return jsonify({
@@ -706,6 +729,7 @@ def get_all_bills():
     finally:
         cursor.close()
         conn.close()
+
 
 
 def update_bill(bill_id):

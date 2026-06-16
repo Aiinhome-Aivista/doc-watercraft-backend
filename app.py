@@ -173,6 +173,7 @@ def pdf_bill():return pdf_bill_generator()
 @app.route(API + '/pdf-bill/<path:filename>', methods=['GET'])
 def download_pdf_bill(filename): return download_bill_pdf(filename)
 
+# GET all bills with detailed activity items and vessel names
 @app.route(API + '/all_bills', methods=['GET'])
 @token_required
 def route_get_all_bills(): return get_all_bills()
