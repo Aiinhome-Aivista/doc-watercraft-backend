@@ -235,6 +235,14 @@ def generate_bill():
     cursor = conn.cursor()
 
     try:
+        # Check if bill has already been generated
+        cursor.execute("SELECT is_generated FROM vessels WHERE id = %s", (vessel_id,))
+        vessel_row = cursor.fetchone()
+        if not vessel_row:
+            return jsonify({"success": False, "message": "Vessel not found"}), 404
+        if vessel_row[0] == 1:
+            return jsonify({"success": False, "message": "Bill has already been generated for this vessel"}), 400
+
         total_base = Decimal(0)
         total_gst = Decimal(0)
         bill_details = []
@@ -336,6 +344,9 @@ def generate_bill():
                 d["gst_amount"]
             ))
 
+        # Mark vessel bill as generated
+        cursor.execute("UPDATE vessels SET is_generated = 1 WHERE id = %s", (vessel_id,))
+
         conn.commit()
 
         return jsonify({
@@ -384,6 +395,7 @@ def get_vessels_for_billing():
             WHERE party_id = %s
               AND status = 'COMPLETED'
               AND sailing_datetime IS NOT NULL
+              AND is_generated = 0
               AND DATE(sailing_datetime) BETWEEN %s AND %s
             ORDER BY sailing_datetime
         """, (party_id, start_date, end_date))
@@ -794,11 +806,20 @@ def delete_bill(bill_id):
         if not cursor.fetchone():
             return jsonify({"success": False, "message": "Bill not found"}), 404
 
+        # Fetch vessel IDs associated with this bill details
+        cursor.execute("SELECT DISTINCT vessel_id FROM bill_details WHERE bill_main_id = %s", (bill_id,))
+        vessels_to_reset = [row[0] for row in cursor.fetchall() if row[0] is not None]
+
         # Delete details first
         cursor.execute("DELETE FROM bill_details WHERE bill_main_id = %s", (bill_id,))
         
         # Delete main bill
         cursor.execute("DELETE FROM bill_main WHERE id = %s", (bill_id,))
+
+        # Reset is_generated status for the vessels
+        if vessels_to_reset:
+            format_strings = ','.join(['%s'] * len(vessels_to_reset))
+            cursor.execute(f"UPDATE vessels SET is_generated = 0 WHERE id IN ({format_strings})", tuple(vessels_to_reset))
 
         conn.commit()
         return jsonify({"success": True, "message": "Bill deleted successfully"}), 200

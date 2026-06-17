@@ -357,6 +357,7 @@ CREATE TABLE `vessels` (
   `sailing_datetime` datetime DEFAULT NULL,
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `is_generated` tinyint(1) NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`),
   UNIQUE KEY `vessel_auto_id` (`vessel_auto_id`),
   KEY `idx_status` (`status`),

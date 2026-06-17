@@ -8,6 +8,35 @@ def _row(row, keys):
     for k, v in d.items():
         if isinstance(v, datetime):
             d[k] = v.strftime("%Y-%m-%d %H:%M:%S")
+            
+    # Calculate own weighbridge net_weight dynamically in Python
+    if any(k in d for k in ["wbin_gross_weight", "wbin_tare_weight", "wbout_gross_weight", "wbout_tare_weight"]):
+        wbin_gross = d.get("wbin_gross_weight")
+        wbin_tare = d.get("wbin_tare_weight")
+        wbout_gross = d.get("wbout_gross_weight")
+        wbout_tare = d.get("wbout_tare_weight")
+        
+        net_val = None
+        try:
+            if wbin_gross is not None and wbout_tare is not None:
+                net_val = abs(float(wbin_gross) - float(wbout_tare))
+            elif wbout_gross is not None and wbin_tare is not None:
+                net_val = abs(float(wbout_gross) - float(wbin_tare))
+        except (ValueError, TypeError):
+            net_val = None
+            
+        if net_val is not None:
+            d["net_weight"] = round(net_val, 3)
+        else:
+            if wbin_gross is None and wbin_tare is None and wbout_gross is None and wbout_tare is None:
+                outside_net = d.get("outside_net_weight")
+                try:
+                    d["net_weight"] = round(float(outside_net), 3) if outside_net is not None else None
+                except (ValueError, TypeError):
+                    d["net_weight"] = outside_net
+            else:
+                d["net_weight"] = None
+        
     return d
 
 
@@ -40,6 +69,8 @@ def get_gate_entries():
                 SELECT c2.id FROM cargo_operations c2 WHERE c2.gate_entry_id = ge.id ORDER BY c2.id DESC LIMIT 1
             )
             LEFT JOIN vessels v ON v.id = co.vessel_id
+            LEFT JOIN wbin_records wbi ON wbi.gate_entry_id = ge.id
+            LEFT JOIN wbout_records wbo ON wbo.gate_entry_id = ge.id
         """
 
         conditions = []
@@ -124,7 +155,12 @@ def get_gate_entries():
                 v.id AS vessel_id,
                 v.vessel_name,
                 co.id AS cargo_operation_id,
-                co.compressor_no
+                co.compressor_no,
+                COALESCE(wbo.net_weight, ge.outside_net_weight) AS net_weight,
+                wbi.gross_weight AS wbin_gross_weight,
+                wbi.tare_weight AS wbin_tare_weight,
+                wbo.gross_weight AS wbout_gross_weight,
+                wbo.tare_weight AS wbout_tare_weight
             {base_query}
             {order_clause}
             LIMIT %s OFFSET %s
@@ -679,7 +715,12 @@ def update_gate_entry(gate_id):
                 v.id AS vessel_id,
                 v.vessel_name,
                 co.id AS cargo_operation_id,
-                co.compressor_no
+                co.compressor_no,
+                COALESCE(wbo.net_weight, ge.outside_net_weight) AS net_weight,
+                wbi.gross_weight AS wbin_gross_weight,
+                wbi.tare_weight AS wbin_tare_weight,
+                wbo.gross_weight AS wbout_gross_weight,
+                wbo.tare_weight AS wbout_tare_weight
             FROM gate_entries ge
             LEFT JOIN party_masters pm ON pm.id = ge.party_id
             LEFT JOIN vehicle_master vm ON vm.id = ge.vehicle_id
@@ -687,6 +728,8 @@ def update_gate_entry(gate_id):
                 SELECT c2.id FROM cargo_operations c2 WHERE c2.gate_entry_id = ge.id ORDER BY c2.id DESC LIMIT 1
             )
             LEFT JOIN vessels v ON v.id = co.vessel_id
+            LEFT JOIN wbin_records wbi ON wbi.gate_entry_id = ge.id
+            LEFT JOIN wbout_records wbo ON wbo.gate_entry_id = ge.id
             WHERE ge.id = %s
         """, (gate_id,))
 

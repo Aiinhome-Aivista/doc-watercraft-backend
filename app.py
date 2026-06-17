@@ -8,7 +8,7 @@ from controllers.vessel_controller import (
     get_vessels, get_vessel, create_vessel,
     berth_vessel, moor_vessel, survey_vessel, unberth_vessel,
     get_vessel_billing, get_mis_report,get_rates_by_vessel,update_rate,update_vessel,
-    get_vessel_names
+    get_vessel_names, get_vehicle_movement_report
 )
 from controllers.gate_controller import (
     get_gate_entries, create_gate_entry, gate_out,
@@ -163,9 +163,13 @@ def route_generate_bill():return generate_bill()
 @token_required
 def route_vessel_billing(vessel_id, rate_id): return update_rate(vessel_id, rate_id)
 
-@app.route(API + '/mis/report', methods=['GET'])
+# @app.route(API + '/mis/report', methods=['GET'])
+# @token_required
+# def route_mis_report(): return get_mis_report()
+
+@app.route(API + '/reports/vehicle-movement', methods=['GET'])
 @token_required
-def route_mis_report(): return get_mis_report()
+def route_vehicle_movement_report(): return get_vehicle_movement_report()
 
 @app.route(API +'/pdf-bill', methods=['POST'])
 def pdf_bill():return pdf_bill_generator()
