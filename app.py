@@ -18,7 +18,7 @@ from controllers.gate_controller import (
 from controllers.partymasters_controller import (get_partymaster, get_partymasters, create_partymaster, update_partymaster,delete_partymaster)
 
 from controllers.billing_controller import (get_vessels_for_billing,generate_bill,pdf_bill_generator,download_bill_pdf,get_all_bills,update_bill,delete_bill)
-from controllers.export_controller import export_full_report, download_export
+from controllers.export_controller import export_full_report, download_export, export_vehicle_movement_report
 import os
 
 
@@ -243,6 +243,11 @@ def route_export_full():return export_full_report()
 
 @app.route(API + '/export/download/<filename>', methods=['GET'])
 def route_download_export(filename):return download_export(filename)
+
+@app.route(API + '/export/vehicle-movement', methods=['GET'])
+@token_required
+def route_export_vehicle_movement(): return export_vehicle_movement_report()
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5001, debug=True)

@@ -716,9 +716,12 @@ def get_vehicle_movement_report():
                 co.start_datetime AS cargo_start_datetime,
                 co.compressor_no,
                 co.end_datetime AS cargo_end_datetime,
-                v.vessel_name
+                v.vessel_name,
+                v.berthing_datetime,
+                v.sailing_datetime,
+                v.survey_quantity
             {base_query}
-            ORDER BY ge.gate_in_datetime DESC
+            ORDER BY ge.gate_in_datetime ASC
         """
 
         cursor.execute(data_query, tuple(params))
