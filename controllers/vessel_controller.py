@@ -117,7 +117,40 @@ def get_vessels():
         cursor.execute(data_query, tuple(data_params))
 
         cols = [c[0] for c in cursor.description]
-        rows = [_vessel_row(r, cols) for r in cursor.fetchall()]
+        vessel_rows = cursor.fetchall()
+        rows = [_vessel_row(r, cols) for r in vessel_rows]
+
+        if rows:
+            vessel_ids = [v["id"] for v in rows]
+            placeholders = ", ".join(["%s"] * len(vessel_ids))
+            cursor.execute(f"""
+                SELECT id, vessel_id, activity, formula, rate, gst_rate, min_qty, max_qty, created_at
+                FROM rate_master
+                WHERE vessel_id IN ({placeholders})
+                ORDER BY vessel_id, id ASC
+            """, tuple(vessel_ids))
+
+            rate_cols = [c[0] for c in cursor.description]
+            rate_rows = cursor.fetchall()
+
+            rates_by_vessel = {}
+            for r in rate_rows:
+                r_dict = dict(zip(rate_cols, r))
+                v_id = r_dict["vessel_id"]
+                if v_id not in rates_by_vessel:
+                    rates_by_vessel[v_id] = []
+
+                created = r_dict["created_at"]
+                if isinstance(created, datetime):
+                    r_dict["created_at"] = created.strftime("%Y-%m-%d %H:%M:%S")
+
+                rates_by_vessel[v_id].append(r_dict)
+
+            for v in rows:
+                v["rates"] = rates_by_vessel.get(v["id"], [])
+        else:
+            for v in rows:
+                v["rates"] = []
 
         return jsonify({
             "success": True,
@@ -350,9 +383,28 @@ def update_vessel(vessel_id):
             vessel_id
         ))
 
+        # 2️⃣ Update Rates (Delete existing, then insert new ones if provided)
+        if "rates" in data:
+            cursor.execute("DELETE FROM rate_master WHERE vessel_id = %s", (vessel_id,))
+            rates = data.get("rates", [])
+            for r in rates:
+                cursor.execute("""
+                    INSERT INTO rate_master
+                    (vessel_id, activity, formula, rate, gst_rate, min_qty, max_qty, created_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
+                """, (
+                    vessel_id,
+                    r.get("activity"),
+                    r.get("formula"),
+                    r.get("rate"),
+                    r.get("gst_rate"),
+                    r.get("min_qty"),
+                    r.get("max_qty")
+                ))
+
         conn.commit()
 
-        # 4️⃣ Return Updated Data
+        # 3️⃣ Return Updated Data
         cursor.execute("SELECT * FROM vessels WHERE id = %s", (vessel_id,))
         cols = [c[0] for c in cursor.description]
         row = cursor.fetchone()
@@ -493,6 +545,9 @@ def unberth_vessel(vessel_id):
     finally:
         cursor.close()
         conn.close()
+
+
+
 
 
 # ---------- Rate Master -----------------
