@@ -664,7 +664,31 @@ def get_all_bills():
     cursor = conn.cursor()
 
     try:
-        cursor.execute("""
+        query_param = request.args.get("query")
+        start = request.args.get("start_date")
+        end = request.args.get("end_date")
+
+        conditions = []
+        params = []
+
+        if query_param:
+            conditions.append("(bm.voucher_number LIKE %s OR pm.party_name LIKE %s OR bm.narration LIKE %s)")
+            like_val = f"%{query_param}%"
+            params.extend([like_val, like_val, like_val])
+
+        if start:
+            conditions.append("bm.bill_date >= %s")
+            params.append(start)
+
+        if end:
+            conditions.append("bm.bill_date <= %s")
+            params.append(end)
+
+        where = " AND ".join(conditions)
+        if where:
+            where = "WHERE " + where
+
+        cursor.execute(f"""
             SELECT 
                 bm.id,
                 bm.voucher_number,
@@ -682,8 +706,9 @@ def get_all_bills():
                 bm.created_at
             FROM bill_main bm
             LEFT JOIN party_masters pm ON bm.party_id = pm.id
+            {where}
             ORDER BY bm.created_at DESC
-        """)
+        """, tuple(params))
 
         cols = [
             "id", "voucher_number", "bill_date", "party_name",

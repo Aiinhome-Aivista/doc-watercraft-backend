@@ -632,4 +632,239 @@ def export_vehicle_movement_report():
         return jsonify({
             "success": False,
             "message": str(e)
+        }), 500
+
+
+def export_bills_report():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        query_param = request.args.get("query")
+        start = request.args.get("start_date")
+        end = request.args.get("end_date")
+
+        conditions = []
+        params = []
+
+        if query_param:
+            conditions.append("(bm.voucher_number LIKE %s OR pm.party_name LIKE %s OR bm.narration LIKE %s)")
+            like_val = f"%{query_param}%"
+            params.extend([like_val, like_val, like_val])
+
+        if start:
+            conditions.append("bm.bill_date >= %s")
+            params.append(start)
+
+        if end:
+            conditions.append("bm.bill_date <= %s")
+            params.append(end)
+
+        where = " AND ".join(conditions)
+        if where:
+            where = "WHERE " + where
+
+        query = f"""
+            SELECT 
+                bm.voucher_number,
+                DATE_FORMAT(bm.bill_date, '%%Y-%%m-%%d') as bill_date,
+                pm.party_name,
+                DATE_FORMAT(bm.period_start, '%%Y-%%m-%%d') as period_start,
+                DATE_FORMAT(bm.period_end, '%%Y-%%m-%%d') as period_end,
+                bm.bill_base_value,
+                bm.cgst,
+                bm.sgst,
+                bm.round_off,
+                bm.total_bill_value,
+                bm.narration
+            FROM bill_main bm
+            LEFT JOIN party_masters pm ON pm.id = bm.party_id
+            {where}
+            ORDER BY bm.bill_date DESC, bm.id DESC
+        """
+        
+        cursor.execute(query, tuple(params))
+        cols = [c[0] for c in cursor.description]
+        rows = cursor.fetchall()
+
+        # Generate excel file
+        file_name = f"BILLS_REPORT_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
+        file_path = os.path.join(EXPORT_FOLDER, file_name)
+
+        from openpyxl import Workbook
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "BILLS_REPORT"
+        ws.views.sheetView[0].showGridLines = True
+
+        # Styles
+        thin_border = Border(
+            left=Side(style="thin", color="CCCCCC"),
+            right=Side(style="thin", color="CCCCCC"),
+            top=Side(style="thin", color="CCCCCC"),
+            bottom=Side(style="thin", color="CCCCCC")
+        )
+        
+        title_font = Font(name="Calibri", size=14, bold=True, color="1B365D")
+        header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+        header_fill = PatternFill(start_color="1B365D", end_color="1B365D", fill_type="solid")
+        
+        center_align = Alignment(horizontal="center", vertical="center")
+        right_align = Alignment(horizontal="right", vertical="center")
+        left_align = Alignment(horizontal="left", vertical="center")
+        
+        total_fill = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
+        total_font = Font(name="Calibri", size=11, bold=True, color="B25E00")
+
+        headers = [
+            "SL. No.",
+            "Voucher No",
+            "Bill Date",
+            "Party Name",
+            "Period Start",
+            "Period End",
+            "Base Value",
+            "CGST",
+            "SGST",
+            "Round Off",
+            "Total Value",
+            "Narration"
+        ]
+
+        # Write Title
+        ws.merge_cells("A1:L1")
+        ws["A1"] = "ALL GENERATED BILLS REPORT"
+        ws["A1"].font = title_font
+        ws["A1"].alignment = center_align
+        ws.row_dimensions[1].height = 25
+
+        # Write filter summary in row 2
+        ws.merge_cells("A2:L2")
+        filter_summary = f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        if start or end:
+            filter_summary += f" | Date Range: {start or 'Any'} to {end or 'Any'}"
+        if query_param:
+            filter_summary += f" | Search filter: '{query_param}'"
+        ws["A2"] = filter_summary
+        ws["A2"].font = Font(name="Calibri", size=10, italic=True)
+        ws["A2"].alignment = center_align
+        ws.row_dimensions[2].height = 20
+
+        # Leave row 3 blank
+        ws.row_dimensions[3].height = 10
+
+        # Write Headers (Row 4)
+        ws.row_dimensions[4].height = 28
+        for col_idx, h in enumerate(headers, 1):
+            cell = ws.cell(row=4, column=col_idx, value=h)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = center_align
+            cell.border = thin_border
+
+        # Write Data
+        start_row = 5
+        for idx, row in enumerate(rows, 1):
+            r_idx = start_row + idx - 1
+            ws.row_dimensions[r_idx].height = 20
+            
+            # Map values
+            vch_no, bill_dt, party, p_start, p_end, base, cgst, sgst, round_off, total, narr = row
+            
+            row_values = [
+                idx,
+                vch_no,
+                bill_dt,
+                party or "—",
+                p_start or "—",
+                p_end or "—",
+                float(base) if base is not None else 0.00,
+                float(cgst) if cgst is not None else 0.00,
+                float(sgst) if sgst is not None else 0.00,
+                float(round_off) if round_off is not None else 0.00,
+                float(total) if total is not None else 0.00,
+                narr or ""
+            ]
+            
+            for col_idx, val in enumerate(row_values, 1):
+                cell = ws.cell(row=r_idx, column=col_idx, value=val)
+                cell.font = Font(name="Calibri", size=11)
+                cell.border = thin_border
+                
+                # Alignments and number formats
+                if col_idx in [1, 2, 3, 5, 6]:
+                    cell.alignment = center_align
+                elif col_idx in [7, 8, 9, 10, 11]:
+                    cell.alignment = right_align
+                    cell.number_format = "0.00"
+                else:
+                    cell.alignment = left_align
+
+        end_row = start_row + len(rows) - 1
+
+        # Write Totals Row
+        total_row = end_row + 1
+        if len(rows) > 0:
+            ws.row_dimensions[total_row].height = 24
+            ws.merge_cells(start_row=total_row, start_column=1, end_row=total_row, end_column=6)
+            t_lbl = ws.cell(row=total_row, column=1, value="Total")
+            t_lbl.font = Font(name="Calibri", size=11, bold=True)
+            t_lbl.alignment = right_align
+            
+            # Sum columns
+            sum_cols = [7, 8, 9, 10, 11] # Base, CGST, SGST, Round Off, Total
+            col_letters = ["G", "H", "I", "J", "K"]
+            
+            for col_idx, col_letter in zip(sum_cols, col_letters):
+                cell = ws.cell(row=total_row, column=col_idx, value=f"=SUM({col_letter}{start_row}:{col_letter}{end_row})")
+                cell.font = total_font
+                cell.fill = total_fill
+                cell.alignment = right_align
+                cell.number_format = "0.00"
+                
+            # Apply border to the merged cells and remaining cells in total row
+            for col_idx in range(1, 13):
+                cell = ws.cell(row=total_row, column=col_idx)
+                cell.border = thin_border
+                if col_idx in [1, 2, 3, 4, 5, 6]:
+                    cell.fill = total_fill
+
+        # Auto width columns
+        for col in ws.columns:
+            max_length = 0
+            col_letter = get_column_letter(col[0].column)
+            for cell in col:
+                if cell.row < 4:
+                    continue
+                try:
+                    if cell.value is not None:
+                        max_length = max(max_length, len(str(cell.value)))
+                except:
+                    pass
+            ws.column_dimensions[col_letter].width = max(max_length + 4, 12)
+
+        # Set specific minimums
+        ws.column_dimensions["A"].width = 8   # SL. No.
+        ws.column_dimensions["B"].width = 18  # Voucher No
+        ws.column_dimensions["C"].width = 14  # Bill Date
+        ws.column_dimensions["D"].width = 25  # Party Name
+        ws.column_dimensions["L"].width = 30  # Narration
+
+        wb.save(file_path)
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            "success": True,
+            "download_url": f"/api/v1/export/download/{file_name}"
+        }), 200
+
+    except Exception as e:
+        if 'cursor' in locals() and cursor:
+            cursor.close()
+        if 'conn' in locals() and conn:
+            conn.close()
+        return jsonify({
+            "success": False,
+            "message": str(e)
         }), 500
