@@ -551,4 +551,61 @@ def get_access_rights(user_id):
         }), 500
 
     finally:
-        conn.close()           
+        conn.close()
+
+
+def delete_user(user_id):
+    try:
+        # 🔐 Get token
+        auth_header = request.headers.get("Authorization")
+        if not auth_header:
+            return jsonify({
+                "status": "error",
+                "message": "Token missing"
+            }), 401
+            
+        token = auth_header.split(" ")[1]
+
+        decoded = jwt.decode(
+            token,
+            current_app.config['SECRET_KEY'],
+            algorithms=["HS256"]
+        )
+
+        # 🔹 Check role
+        if decoded.get("role") != "admin":
+            return jsonify({
+                "status": "error",
+                "message": "Only admin can delete user"
+            }), 403
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT id, username FROM users WHERE id=%s", (user_id,))
+        user_to_delete = cursor.fetchone()
+        if not user_to_delete:
+            return jsonify({
+                "status": "error",
+                "message": "User not found"
+            }), 404
+
+        # Delete the user from the users table.
+        # Cascade deletes will handle user_access_rights.
+        cursor.execute("DELETE FROM users WHERE id=%s", (user_id,))
+        conn.commit()
+
+        return jsonify({
+            "status": "success",
+            "message": f"User {user_to_delete[1]} deleted successfully"
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
+
+    finally:
+        if 'conn' in locals() and conn:
+            conn.close()           

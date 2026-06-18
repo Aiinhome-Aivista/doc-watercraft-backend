@@ -2,7 +2,7 @@ from flask import Flask
 from flask_cors import CORS
 from middleware.auth_middleware import token_required
 
-from controllers.auth_controller import (login,register,get_loggedin_user,get_all_users,update_access_rights,get_access_rights,change_password,admin_change_user_password)
+from controllers.auth_controller import (login,register,get_loggedin_user,get_all_users,update_access_rights,get_access_rights,change_password,admin_change_user_password,delete_user)
 from controllers.vehicle_controller import (create_vehicle, get_vehicles, get_vehicle, update_vehicle, delete_vehicle, toggle_vehicle_status)
 from controllers.vessel_controller import (
     get_vessels, get_vessel, create_vessel,
@@ -46,6 +46,10 @@ def route_loggedin_user(): return get_loggedin_user()
 @app.route(API + '/users', methods=['GET'])
 @token_required
 def route_get_users(): return get_all_users()
+
+@app.route(API + '/users/<int:user_id>', methods=['DELETE'])
+@token_required
+def route_delete_user(user_id): return delete_user(user_id)
 
 @app.route(API + '/change-password', methods=['POST'])
 @token_required
