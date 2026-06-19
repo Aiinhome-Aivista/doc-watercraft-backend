@@ -643,22 +643,27 @@ def export_bills_report():
         query_param = request.args.get("query")
         start = request.args.get("start_date")
         end = request.args.get("end_date")
+        bill_id = request.args.get("bill_id")
 
         conditions = []
         params = []
 
-        if query_param:
-            conditions.append("(bm.voucher_number LIKE %s OR pm.party_name LIKE %s OR bm.narration LIKE %s)")
-            like_val = f"%{query_param}%"
-            params.extend([like_val, like_val, like_val])
+        if bill_id:
+            conditions.append("bm.id = %s")
+            params.append(bill_id)
+        else:
+            if query_param:
+                conditions.append("(bm.voucher_number LIKE %s OR pm.party_name LIKE %s OR bm.narration LIKE %s)")
+                like_val = f"%{query_param}%"
+                params.extend([like_val, like_val, like_val])
 
-        if start:
-            conditions.append("bm.bill_date >= %s")
-            params.append(start)
+            if start:
+                conditions.append("bm.bill_date >= %s")
+                params.append(start)
 
-        if end:
-            conditions.append("bm.bill_date <= %s")
-            params.append(end)
+            if end:
+                conditions.append("bm.bill_date <= %s")
+                params.append(end)
 
         where = " AND ".join(conditions)
         if where:
@@ -688,7 +693,12 @@ def export_bills_report():
         rows = cursor.fetchall()
 
         # Generate excel file
-        file_name = f"BILLS_REPORT_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
+        if bill_id and len(rows) > 0:
+            voucher_no = rows[0][0]
+            safe_vch = "".join([c if c.isalnum() or c in ('-', '_') else '_' for c in voucher_no])
+            file_name = f"BILL_{safe_vch}.xlsx"
+        else:
+            file_name = f"BILLS_REPORT_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
         file_path = os.path.join(EXPORT_FOLDER, file_name)
 
         from openpyxl import Workbook

@@ -480,7 +480,7 @@ def get_bill_data(bill_main_id):
             })
 
         return {
-            "voucher_number": bm["voucher_number"],
+            "voucher_number": bm[0],
             "total_base": float(bm[1]),
             "cgst": float(bm[2]),
             "sgst": float(bm[3]),
@@ -856,6 +856,37 @@ def delete_bill(bill_id):
     finally:
         cursor.close()
         conn.close()
+
+
+def download_single_bill_pdf_route(bill_id):
+    try:
+        bill_data = get_bill_data(bill_id)
+        if not bill_data:
+            return jsonify({"success": False, "message": "Bill not found"}), 404
+
+        folder = "generated_pdfs"
+        os.makedirs(folder, exist_ok=True)
+
+        file_name = f"{bill_data['voucher_number']}.pdf"
+        file_path = os.path.join(folder, file_name)
+
+        # Generate/regenerate PDF to ensure it is up-to-date
+        generate_invoice_pdf(bill_data, file_path)
+
+        download_url = f"/api/v1/pdf-bill/{file_name}"
+
+        return jsonify({
+            "success": True,
+            "message": "PDF generated successfully",
+            "voucher_number": bill_data["voucher_number"],
+            "download_url": download_url,
+            "file_name": file_name,
+        }), 200
+
+    except Exception as e:
+        print("PDF ERROR:", str(e))
+        return jsonify({"success": False, "message": str(e)}), 500
+
 
 
 

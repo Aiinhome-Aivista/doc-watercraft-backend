@@ -17,7 +17,7 @@ from controllers.gate_controller import (
 )
 from controllers.partymasters_controller import (get_partymaster, get_partymasters, create_partymaster, update_partymaster,delete_partymaster)
 
-from controllers.billing_controller import (get_vessels_for_billing,generate_bill,pdf_bill_generator,download_bill_pdf,get_all_bills,update_bill,delete_bill)
+from controllers.billing_controller import (get_vessels_for_billing,generate_bill,pdf_bill_generator,download_bill_pdf,get_all_bills,update_bill,delete_bill,download_single_bill_pdf_route)
 from controllers.export_controller import export_full_report, download_export, export_vehicle_movement_report, export_bills_report
 import os
 
@@ -193,6 +193,12 @@ def route_update_bill(bill_id): return update_bill(bill_id)
 @app.route(API + '/all_bills/<int:bill_id>', methods=['DELETE'])
 @token_required
 def route_delete_bill(bill_id): return delete_bill(bill_id)
+
+@app.route(API + '/all_bills/<int:bill_id>/pdf', methods=['GET'])
+@token_required
+def route_download_single_bill_pdf(bill_id):
+    return download_single_bill_pdf_route(bill_id)
+
 
 # ─── Gate Entry Routes ──────────────────────────────────────────
 @app.route(API + '/gate-entries', methods=['GET'])
