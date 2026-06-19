@@ -694,6 +694,11 @@ def get_all_bills():
                 bm.voucher_number,
                 bm.bill_date,
                 pm.party_name,
+                pm.party_code,
+                pm.address,
+                pm.state,
+                pm.pan_number,
+                pm.gst_number,
                 bm.period_start,
                 bm.period_end,
                 bm.narration,
@@ -712,6 +717,7 @@ def get_all_bills():
 
         cols = [
             "id", "voucher_number", "bill_date", "party_name",
+            "party_code", "address", "state", "pan_number", "gst_number",
             "period_start", "period_end", "narration", "bill_base_value",
             "cgst", "sgst", "igst", "round_off", "total_bill_value", "created_at"
         ]
