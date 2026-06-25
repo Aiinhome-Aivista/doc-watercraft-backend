@@ -252,6 +252,7 @@ def export_vehicle_movement_report():
                 vm.transporter_name,
                 ge.driver_name,
                 ge.driver_mob_no,
+                ge.supplier_name,
                 ge.outside_payment_slip,
                 ge.outside_gross_weight,
                 ge.outside_tare_weight,
@@ -347,6 +348,7 @@ def export_vehicle_movement_report():
 
             vessel_groups[v_name]["rows"].append({
                 "party_name": d.get("party_name") or "—",
+                "supplier_name": d.get("supplier_name") or "—",
                 "gate_in_datetime": fmt_dt(gate_in),
                 "challan_invoice_no": d.get("challan_invoice_no") or "—",
                 "vehicle_no": d.get("vehicle_no") or "—",
@@ -405,6 +407,7 @@ def export_vehicle_movement_report():
         headers_cols = [
             "SL. No.",
             "Consignor - (Party Name)",
+            "Supplier Name",
             "(GATE)\nEntry Date & Time as per",
             "CHALLAN &\nINV. NO",
             "VEHICLE NO.",
@@ -428,13 +431,13 @@ def export_vehicle_movement_report():
         ]
 
         numeric_cols = {
-            10: "0.00", # Out gross Wt
-            11: "0.00", # Out tare wt
-            12: "0.00", # Out nett wt
-            14: "0.00", # Gross Weight
-            16: "0.00", # Tare Weight
-            18: "0.00", # Net Material Qty
-            19: "0"     # Waiting Hour 24
+            11: "0.00", # Out gross Wt
+            12: "0.00", # Out tare wt
+            13: "0.00", # Out nett wt
+            15: "0.00", # Gross Weight
+            17: "0.00", # Tare Weight
+            19: "0.00", # Net Material Qty
+            20: "0"     # Waiting Hour 24
         }
 
         current_row = 1
@@ -442,7 +445,7 @@ def export_vehicle_movement_report():
         # In case there's no data
         if not vessel_groups:
             # Write a simple empty state
-            ws.merge_cells("A1:V1")
+            ws.merge_cells("A1:W1")
             ws["A1"] = "NO VEHICLE MOVEMENT RECORDS FOUND"
             ws["A1"].font = Font(name="Calibri", size=14, bold=True)
             ws["A1"].alignment = Alignment(horizontal="center")
@@ -507,6 +510,7 @@ def export_vehicle_movement_report():
                     row_values = [
                         sl_no,
                         r_data["party_name"],
+                        r_data["supplier_name"],
                         r_data["gate_in_datetime"],
                         r_data["challan_invoice_no"],
                         r_data["vehicle_no"],
@@ -535,7 +539,7 @@ def export_vehicle_movement_report():
                         cell.border = thin_border
                         
                         # Alignment & format
-                        if col_idx in [1, 3, 5, 8, 9, 13, 15, 17, 21]:
+                        if col_idx in [1, 4, 6, 9, 10, 14, 16, 18, 22]:
                             cell.alignment = center_align
                         elif col_idx in numeric_cols:
                             cell.alignment = right_align
@@ -544,8 +548,8 @@ def export_vehicle_movement_report():
                         else:
                             cell.alignment = left_align
 
-                        # Highlight Net Material Qty (Col 18)
-                        if col_idx == 18:
+                        # Highlight Net Material Qty (Col 19)
+                        if col_idx == 19:
                             cell.fill = yellow_fill
                             cell.font = net_font
 
@@ -555,24 +559,24 @@ def export_vehicle_movement_report():
                 current_row += 1
                 ws.row_dimensions[current_row].height = 24
                 
-                # Merge A to Q for Total Label
-                ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=17)
+                # Merge A to R for Total Label
+                ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=18)
                 total_label = ws.cell(row=current_row, column=1, value="Total")
                 total_label.font = Font(name="Calibri", size=11, bold=True)
                 total_label.alignment = right_align
                 
-                # Sum formula for Net Material Qty (Col 18)
+                # Sum formula for Net Material Qty (Col 19)
                 if end_data_row >= start_data_row:
-                    sum_cell = ws.cell(row=current_row, column=18, value=f"=SUM(R{start_data_row}:R{end_data_row})")
+                    sum_cell = ws.cell(row=current_row, column=19, value=f"=SUM(S{start_data_row}:S{end_data_row})")
                 else:
-                    sum_cell = ws.cell(row=current_row, column=18, value=0.0)
+                    sum_cell = ws.cell(row=current_row, column=19, value=0.0)
                 sum_cell.font = Font(name="Calibri", size=11, bold=True, color="B25E00")
                 sum_cell.alignment = right_align
                 sum_cell.number_format = "0.00"
                 sum_cell.fill = PatternFill(start_color="FFE699", end_color="FFE699", fill_type="solid")
 
                 # Apply borders to total row cells
-                for col_idx in range(1, 23):
+                for col_idx in range(1, 24):
                     cell = ws.cell(row=current_row, column=col_idx)
                     cell.border = thin_border
 

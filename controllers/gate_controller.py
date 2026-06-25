@@ -146,6 +146,7 @@ def get_gate_entries():
                 ge.gate_out_datetime,
                 ge.driver_name,
                 ge.driver_mob_no,
+                ge.supplier_name,
                 ge.created_at,
                 ge.updated_at,
                 pm.party_name,
@@ -248,7 +249,8 @@ def create_gate_entry():
             data["gate_in_datetime"],
             data.get("direction"),
             data.get("driver_name"),
-            data.get("driver_mob_no")
+            data.get("driver_mob_no"),
+            data.get("supplier_name")
         ))
 
         result = list(cursor.stored_results())[0]
@@ -620,6 +622,7 @@ def update_gate_entry(gate_id):
                 gate_out_datetime = %s,
                 driver_name = %s,
                 driver_mob_no = %s,
+                supplier_name = %s,
                 updated_at = NOW()
             WHERE id = %s
         """
@@ -638,6 +641,7 @@ def update_gate_entry(gate_id):
         gate_out_datetime = data.get("gate_out_datetime") or None
         driver_name = data.get("driver_name")
         driver_mob_no = data.get("driver_mob_no")
+        supplier_name = data.get("supplier_name")
 
         cursor.execute(query, (
             party_id,
@@ -654,6 +658,7 @@ def update_gate_entry(gate_id):
             gate_out_datetime,
             driver_name,
             driver_mob_no,
+            supplier_name,
             gate_id
         ))
 
@@ -706,6 +711,7 @@ def update_gate_entry(gate_id):
                 ge.gate_out_datetime,
                 ge.driver_name,
                 ge.driver_mob_no,
+                ge.supplier_name,
                 ge.created_at,
                 ge.updated_at,
                 pm.party_name,

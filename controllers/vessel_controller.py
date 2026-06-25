@@ -757,6 +757,7 @@ def get_vehicle_movement_report():
                 vm.transporter_name,
                 ge.driver_name,
                 ge.driver_mob_no,
+                ge.supplier_name,
                 ge.outside_payment_slip,
                 ge.outside_gross_weight,
                 ge.outside_tare_weight,
