@@ -1,3 +1,65 @@
-venv
-__pycache__
+# venv
+# __pycache__
+# .DS_Store
+
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environment
+venv/
+env/
+ENV/
+.venv/
+
+# Environment Variables
+.env
+.env.*
+
+# Python Distribution
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Logs
+*.log
+
+# IDE
+.vscode/
+.idea/
+
+# OS Files
 .DS_Store
+Thumbs.db
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# MyPy
+.mypy_cache/
+
+# PyCharm
+*.iml
+
+# SQLite
+*.sqlite3
+*.db
+
+# Temporary Files
+*.tmp
+*.temp
+
+# Uploaded Files (optional)
+uploads/
+extracted/
+
+# Generated JSON (optional)
+*.json
+.env

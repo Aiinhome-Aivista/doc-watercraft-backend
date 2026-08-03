@@ -65,9 +65,12 @@ def get_gate_entries():
             FROM gate_entries ge
             LEFT JOIN party_masters pm ON pm.id = ge.party_id
             LEFT JOIN vehicle_master vm ON vm.id = ge.vehicle_id
-            LEFT JOIN cargo_operations co ON co.id = (
-                SELECT c2.id FROM cargo_operations c2 WHERE c2.gate_entry_id = ge.id ORDER BY c2.id DESC LIMIT 1
-            )
+            LEFT JOIN (
+                SELECT gate_entry_id, MAX(id) AS max_co_id
+                FROM cargo_operations
+                GROUP BY gate_entry_id
+            ) co_max ON co_max.gate_entry_id = ge.id
+            LEFT JOIN cargo_operations co ON co.id = co_max.max_co_id
             LEFT JOIN vessels v ON v.id = co.vessel_id
             LEFT JOIN wbin_records wbi ON wbi.gate_entry_id = ge.id
             LEFT JOIN wbout_records wbo ON wbo.gate_entry_id = ge.id
@@ -104,14 +107,14 @@ def get_gate_entries():
             params.append(f"%{vehicle_no}%")
 
         if start_date and end_date:
-            conditions.append("DATE(ge.gate_in_datetime) BETWEEN %s AND %s")
-            params.extend([start_date, end_date])
+            conditions.append("ge.gate_in_datetime >= %s AND ge.gate_in_datetime <= %s")
+            params.extend([f"{start_date} 00:00:00", f"{end_date} 23:59:59"])
         elif start_date:
-            conditions.append("DATE(ge.gate_in_datetime) >= %s")
-            params.append(start_date)
+            conditions.append("ge.gate_in_datetime >= %s")
+            params.append(f"{start_date} 00:00:00")
         elif end_date:
-            conditions.append("DATE(ge.gate_in_datetime) <= %s")
-            params.append(end_date)
+            conditions.append("ge.gate_in_datetime <= %s")
+            params.append(f"{end_date} 23:59:59")
 
         if conditions:
             base_query += " WHERE " + " AND ".join(conditions)
