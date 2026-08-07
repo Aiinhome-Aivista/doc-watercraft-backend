@@ -1,4 +1,5 @@
 import jwt
+import bcrypt
 from datetime import datetime, timedelta
 from flask import request, jsonify, current_app
 from database.db_connection import get_db_connection
@@ -19,14 +20,22 @@ def login():
     try:
         # 🔹 Get user
         cursor.execute("""
-            SELECT id, username, role, full_name,is_active
+            SELECT id, username, role, full_name, password, is_active
             FROM users
-            WHERE email=%s AND password=%s
-        """, (data["email"], data["password"]))
+            WHERE email=%s
+        """, (data["email"],))
 
         user = cursor.fetchone()
 
         if not user:
+            return jsonify({
+                "status": "error",
+                "message": "Invalid credentials"
+            }), 401
+
+        # Verify password hash
+        stored_hash = user[4]
+        if not bcrypt.checkpw(data["password"].encode('utf-8'), stored_hash.encode('utf-8') if isinstance(stored_hash, str) else stored_hash):
             return jsonify({
                 "status": "error",
                 "message": "Invalid credentials"
@@ -180,18 +189,25 @@ def change_password():
         cursor.execute("SELECT password FROM users WHERE id=%s", (user_id,))
         user = cursor.fetchone()
 
-        if not user or user[0] != data["old_password"]:
+        if not user:
+            return jsonify({
+                "status": "error",
+                "message": "User not found"
+            }), 400
+        stored_hash = user[0]
+        if not bcrypt.checkpw(data["old_password"].encode('utf-8'), stored_hash.encode('utf-8') if isinstance(stored_hash, str) else stored_hash):
             return jsonify({
                 "status": "error",
                 "message": "Old password incorrect"
             }), 400
 
-        # 🔹 Update password
+        # 🔹 Update password with new hash
+        new_hash = bcrypt.hashpw(data["new_password"].encode('utf-8'), bcrypt.gensalt())
         cursor.execute("""
             UPDATE users 
             SET password=%s 
             WHERE id=%s
-        """, (data["new_password"], user_id))
+        """, (new_hash, user_id))
 
         conn.commit()
 
@@ -248,11 +264,12 @@ def admin_change_user_password(user_id):
             }), 404
 
         # 🔹 Update password
+        new_hash = bcrypt.hashpw(data["new_password"].encode('utf-8'), bcrypt.gensalt())
         cursor.execute("""
-            UPDATE users 
-            SET password=%s 
-            WHERE id=%s
-        """, (data["new_password"], user_id))
+                UPDATE users 
+                SET password=%s 
+                WHERE id=%s
+            """, (new_hash, user_id))
 
         conn.commit()
 
@@ -293,6 +310,7 @@ def register():
             }), 400
 
         # 🔹 Insert user
+        hashed_pw = bcrypt.hashpw(data.get("password").encode('utf-8'), bcrypt.gensalt())
         cursor.execute("""
             INSERT INTO users 
             (role, username, password, full_name, mobile, email, is_active)
@@ -300,7 +318,7 @@ def register():
         """, (
             "user",
             data.get("username"),
-            data.get("password"),
+            hashed_pw,
             data.get("full_name"),
             data.get("mobile"),
             data.get("email"),
