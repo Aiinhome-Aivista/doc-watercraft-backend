@@ -32,11 +32,16 @@ def create_vehicle():
         return jsonify({"message": "Vehicle created successfully"}), 201
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 400
+        print(f"Error in create_vehicle: {e}")
+        if 'conn' in locals() and conn:
+            conn.rollback()
+        return jsonify({"error": "Internal server error"}), 500
 
     finally:
-        cursor.close()
-        conn.close()
+        if 'cursor' in locals() and cursor:
+            cursor.close()
+        if 'conn' in locals() and conn:
+            conn.close()
 
 
 # READ All Vehicles
@@ -102,11 +107,16 @@ def update_vehicle(vehicle_id):
         return jsonify({"message": "Vehicle updated successfully"})
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 400
+        print(f"Error in update_vehicle: {e}")
+        if 'conn' in locals() and conn:
+            conn.rollback()
+        return jsonify({"error": "Internal server error"}), 500
 
     finally:
-        cursor.close()
-        conn.close()
+        if 'cursor' in locals() and cursor:
+            cursor.close()
+        if 'conn' in locals() and conn:
+            conn.close()
 
 
 # DELETE Vehicle
@@ -120,11 +130,16 @@ def delete_vehicle(vehicle_id):
         return jsonify({"message": "Vehicle deleted successfully"})
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 400
+        print(f"Error in delete_vehicle: {e}")
+        if 'conn' in locals() and conn:
+            conn.rollback()
+        return jsonify({"error": "Internal server error"}), 500
 
     finally:
-        cursor.close()
-        conn.close()
+        if 'cursor' in locals() and cursor:
+            cursor.close()
+        if 'conn' in locals() and conn:
+            conn.close()
 
 
 def toggle_vehicle_status(vehicle_id):
@@ -158,9 +173,14 @@ def toggle_vehicle_status(vehicle_id):
         })
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 400
+        print(f"Error in toggle_vehicle_status: {e}")
+        if 'conn' in locals() and conn:
+            conn.rollback()
+        return jsonify({"error": "Internal server error"}), 500
 
     finally:
-        cursor.close()
-        conn.close()
+        if 'cursor' in locals() and cursor:
+            cursor.close()
+        if 'conn' in locals() and conn:
+            conn.close()
 

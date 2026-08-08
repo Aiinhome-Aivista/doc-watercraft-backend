@@ -1,0 +1,72 @@
+import os
+import mysql.connector
+from dotenv import load_dotenv
+
+load_dotenv()
+
+def get_db_connection():
+    return mysql.connector.connect(
+        host=os.getenv("MYSQL_HOST"),
+        port=int(os.getenv("MYSQL_PORT", 3306)),
+        user=os.getenv("MYSQL_USERNAME"),
+        password=os.getenv("MYSQL_PASSWORD"),
+        database=os.getenv("MYSQL_NAME")
+    )
+
+def fix_mysql_definers():
+    print("Running MySQL definers setup...")
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # 1. Create missing 'aiinhome'@'%' definer user in MySQL if possible
+        try:
+            cursor.execute("CREATE USER IF NOT EXISTS 'aiinhome'@'%' IDENTIFIED BY ''")
+            cursor.execute("GRANT ALL PRIVILEGES ON *.* TO 'aiinhome'@'%'")
+            cursor.execute("FLUSH PRIVILEGES")
+            print("- Checked/Created aiinhome definer user.")
+        except Exception as e:
+            print(f"- Warning creating user: {e}")
+
+        # 2. Re-create v_vessel_billing view with CURRENT_USER as definer
+        try:
+            view_sql = """
+            CREATE OR REPLACE DEFINER = CURRENT_USER VIEW `v_vessel_billing` AS 
+            SELECT 
+                `v`.`id` AS `vessel_id`,
+                `v`.`vessel_auto_id` AS `vessel_auto_id`,
+                `v`.`vessel_name` AS `vessel_name`,
+                `v`.`party_id` AS `party_id`,
+                `pm`.`party_name` AS `party_name`,
+                `v`.`cargo_type` AS `cargo_type`,
+                `v`.`quantity` AS `quantity`,
+                `v`.`direction` AS `direction`,
+                `v`.`status` AS `status`,
+                `v`.`expected_date` AS `expected_date`,
+                `v`.`berthing_datetime` AS `berthing_datetime`,
+                `v`.`mooring_datetime` AS `mooring_datetime`,
+                `v`.`survey_quantity` AS `survey_quantity`,
+                `v`.`survey_datetime` AS `survey_datetime`,
+                `v`.`sailing_datetime` AS `sailing_datetime`,
+                coalesce(sum(`bd`.`amount`),0) AS `total_base_amount`,
+                coalesce(sum(`bd`.`gst_amount`),0) AS `total_gst_amount`,
+                coalesce(sum((`bd`.`amount` + `bd`.`gst_amount`)),0) AS `grand_total_amount`,
+                (case when (sum(`bd`.`amount`) > 0) then 'BILLED' else 'PENDING' end) AS `billing_status` 
+            FROM ((`vessels` `v` LEFT JOIN `party_masters` `pm` ON ((`v`.`party_id` = `pm`.`id`)))
+            LEFT JOIN `bill_details` `bd` ON ((`v`.`id` = `bd`.`vessel_id`)))
+            GROUP BY `v`.`id`,`pm`.`party_name`;
+            """
+            cursor.execute(view_sql)
+            conn.commit()
+            print("- Checked/Recreated v_vessel_billing view.")
+        except Exception as e:
+            print(f"- Warning recreating view: {e}")
+            
+        cursor.close()
+        conn.close()
+        print("Done.")
+    except Exception as e:
+        print("[Auto-Fix MySQL Definers] Note:", e)
+
+if __name__ == "__main__":
+    fix_mysql_definers()

@@ -170,17 +170,7 @@ def change_password():
         }), 400
 
     try:
-        # 🔐 Get token from header
-        auth_header = request.headers.get("Authorization")
-        token = auth_header.split(" ")[1]
-
-        decoded = jwt.decode(
-            token,
-            current_app.config['SECRET_KEY'],
-            algorithms=["HS256"]
-        )
-
-        user_id = decoded["user_id"]
+        user_id = request.user["user_id"]
 
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -217,13 +207,17 @@ def change_password():
         }), 200
 
     except Exception as e:
+        print(f"Error in change_password: {e}")
+        if 'conn' in locals() and conn:
+            conn.rollback()
         return jsonify({
             "status": "error",
-            "message": str(e)
+            "message": "Internal server error"
         }), 500
 
     finally:
-        conn.close()
+        if 'conn' in locals() and conn:
+            conn.close()
 
 def admin_change_user_password(user_id):
     data = request.get_json()
@@ -235,18 +229,8 @@ def admin_change_user_password(user_id):
         }), 400
 
     try:
-        # 🔐 Get token
-        auth_header = request.headers.get("Authorization")
-        token = auth_header.split(" ")[1]
-
-        decoded = jwt.decode(
-            token,
-            current_app.config['SECRET_KEY'],
-            algorithms=["HS256"]
-        )
-
         # 🔹 Check role
-        if decoded.get("role") != "admin":
+        if request.user.get("role") != "admin":
             return jsonify({
                 "status": "error",
                 "message": "Only admin can change user password"
@@ -279,13 +263,17 @@ def admin_change_user_password(user_id):
         }), 200
 
     except Exception as e:
+        print(f"Error in admin_change_user_password: {e}")
+        if 'conn' in locals() and conn:
+            conn.rollback()
         return jsonify({
             "status": "error",
-            "message": str(e)
+            "message": "Internal server error"
         }), 500
 
     finally:
-        conn.close()
+        if 'conn' in locals() and conn:
+            conn.close()
 
 def register():
     data = request.get_json()
@@ -351,36 +339,22 @@ def register():
         }), 201
 
     except Exception as e:
+        print(f"Error in register: {e}")
+        if 'conn' in locals() and conn:
+            conn.rollback()
         return jsonify({
             "status": "error",
-            "message": str(e)
+            "message": "Internal server error"
         }), 500
 
     finally:
-        conn.close()
+        if 'conn' in locals() and conn:
+            conn.close()
 
 
 def get_loggedin_user():
-    auth_header = request.headers.get("Authorization")
-
-    if not auth_header:
-        return jsonify({
-            "status": "error",
-            "message": "Token missing"
-        }), 401
-
     try:
-        # 🔐 Extract token (Bearer TOKEN)
-        token = auth_header.split(" ")[1]
-
-        # 🔓 Decode token
-        decoded = jwt.decode(
-            token,
-            current_app.config['SECRET_KEY'],
-            algorithms=["HS256"]
-        )
-
-        user_id = decoded["user_id"]
+        user_id = request.user["user_id"]
 
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -413,22 +387,11 @@ def get_loggedin_user():
             }
         }), 200
 
-    except jwt.ExpiredSignatureError:
-        return jsonify({
-            "status": "error",
-            "message": "Token expired"
-        }), 401
-
-    except jwt.InvalidTokenError:
-        return jsonify({
-            "status": "error",
-            "message": "Invalid token"
-        }), 401
-
     except Exception as e:
+        print(f"Error in get_loggedin_user: {e}")
         return jsonify({
             "status": "error",
-            "message": str(e)
+            "message": "Internal server error"
         }), 500
 
 
@@ -574,24 +537,8 @@ def get_access_rights(user_id):
 
 def delete_user(user_id):
     try:
-        # 🔐 Get token
-        auth_header = request.headers.get("Authorization")
-        if not auth_header:
-            return jsonify({
-                "status": "error",
-                "message": "Token missing"
-            }), 401
-            
-        token = auth_header.split(" ")[1]
-
-        decoded = jwt.decode(
-            token,
-            current_app.config['SECRET_KEY'],
-            algorithms=["HS256"]
-        )
-
         # 🔹 Check role
-        if decoded.get("role") != "admin":
+        if request.user.get("role") != "admin":
             return jsonify({
                 "status": "error",
                 "message": "Only admin can delete user"
@@ -619,9 +566,12 @@ def delete_user(user_id):
         }), 200
 
     except Exception as e:
+        print(f"Error in delete_user: {e}")
+        if 'conn' in locals() and conn:
+            conn.rollback()
         return jsonify({
             "status": "error",
-            "message": str(e)
+            "message": "Internal server error"
         }), 500
 
     finally:
