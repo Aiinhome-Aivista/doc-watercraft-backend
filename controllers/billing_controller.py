@@ -56,31 +56,39 @@ def build_context(vessel_id):
         context["mooring_start"] = vessel.get("mooring_datetime")
         context["mooring_end"] = vessel.get("sailing_datetime")
 
-        # Gate count
+        # Gate count (exclude billing_calculation_required = 0)
         cursor.execute("""
             SELECT COUNT(DISTINCT g.id)
             FROM cargo_operations co
             JOIN gate_entries g ON co.gate_entry_id = g.id
             WHERE co.vessel_id = %s
+            AND (g.billing_calculation_required IS NULL OR g.billing_calculation_required = 1)
         """, (vessel_id,))
         context["gatein_count"] = cursor.fetchone()[0] or 0
 
-        # WBIN count
+        # WBIN count (distinct trucks, exclude billing_calculation_required = 0)
         cursor.execute("""
-            SELECT COUNT(*)
+            SELECT COUNT(DISTINCT w.gate_entry_id)
             FROM cargo_operations co
             JOIN wbin_records w ON co.gate_entry_id = w.gate_entry_id
+            JOIN gate_entries g ON co.gate_entry_id = g.id
             WHERE co.vessel_id = %s
+            AND (g.billing_calculation_required IS NULL OR g.billing_calculation_required = 1)
         """, (vessel_id,))
         context["wbin_count"] = cursor.fetchone()[0] or 0
 
-        # Vehicles
+        # Safety check: Weighment Count should never be greater than Truck Entry Count
+        if context["wbin_count"] > context["gatein_count"]:
+            context["wbin_count"] = context["gatein_count"]
+
+        # Vehicles (exclude billing_calculation_required = 0)
         cursor.execute("""
             SELECT g.gate_in_datetime, g.gate_out_datetime
             FROM cargo_operations co
             JOIN gate_entries g ON co.gate_entry_id = g.id
             WHERE co.vessel_id = %s
             AND g.gate_out_datetime IS NOT NULL
+            AND (g.billing_calculation_required IS NULL OR g.billing_calculation_required = 1)
         """, (vessel_id,))
 
         vehicles = []

@@ -752,6 +752,7 @@ def get_vehicle_movement_report():
             SELECT 
                 pm.party_name,
                 ge.gate_in_datetime,
+                ge.own_weighbridge,
                 ge.challan_invoice_no,
                 vm.vehicle_no,
                 vm.transporter_name,
@@ -831,6 +832,15 @@ def get_vehicle_movement_report():
                 d["tare_weight"] = round(float(own_tare), 3) if own_tare is not None else None
             except (ValueError, TypeError):
                 d["tare_weight"] = own_tare
+
+            # If own_weighbridge=1, entry never went through WBOUT.
+            # Any wbout_records data is stale/spurious — null it out.
+            if d.get("own_weighbridge") == 1:
+                d["wbout_datetime"] = None
+                d["wbout_gross_weight"] = None
+                d["wbout_tare_weight"] = None
+                d["tare_weight"] = None
+                d["gross_weight"] = None
 
             # Calculate Waiting Hour 24 (rounded to nearest integer)
             gate_in = d.get("gate_in_datetime")

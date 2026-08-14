@@ -144,6 +144,7 @@ def get_gate_entries():
                 ge.outside_tare_weight,
                 ge.outside_net_weight,
                 ge.own_weighbridge,
+                ge.billing_calculation_required,
                 ge.status,
                 ge.direction,
                 ge.gate_out_datetime,
@@ -156,10 +157,11 @@ def get_gate_entries():
                 pm.party_code,
                 vm.vehicle_no,
                 vm.transporter_name,
-                v.id AS vessel_id,
                 v.vessel_name,
                 co.id AS cargo_operation_id,
                 co.compressor_no,
+                co.start_datetime AS cargo_start_datetime,
+                co.end_datetime AS cargo_end_datetime,
                 COALESCE(wbo.net_weight, ge.outside_net_weight) AS net_weight,
                 wbi.gross_weight AS wbin_gross_weight,
                 wbi.tare_weight AS wbin_tare_weight,
@@ -261,12 +263,20 @@ def create_gate_entry():
         cols = [c[0] for c in result.description]
         row = result.fetchone()
 
+        gate_entry_data = _row(row, cols)
+        gate_entry_id = gate_entry_data["id"]
+
+        # Update billing_calculation_required manually since stored proc doesn't handle it
+        billing_calc = int(data.get("billing_calculation_required", 1))
+        cursor.execute("UPDATE gate_entries SET billing_calculation_required = %s WHERE id = %s", (billing_calc, gate_entry_id))
         conn.commit()
+
+        gate_entry_data["billing_calculation_required"] = billing_calc
 
         return jsonify({
             "success": True,
             "message": "Gate entry created successfully",
-            "data": _row(row, cols)
+            "data": gate_entry_data
         }), 201
 
     except Exception as e:
@@ -619,6 +629,7 @@ def update_gate_entry(gate_id):
                 outside_gross_weight = %s,
                 outside_tare_weight = %s,
                 own_weighbridge = %s,
+                billing_calculation_required = %s,
                 gate_in_datetime = %s,
                 direction = %s,
                 status = %s,
@@ -638,6 +649,7 @@ def update_gate_entry(gate_id):
         outside_gross_weight = data.get("outside_gross_weight")
         outside_tare_weight = data.get("outside_tare_weight")
         own_weighbridge = int(data.get("own_weighbridge", 0))
+        billing_calculation_required = int(data.get("billing_calculation_required", 1))
         gate_in_datetime = data.get("gate_in_datetime")
         direction = data.get("direction")
         status = data.get("status")
@@ -655,6 +667,7 @@ def update_gate_entry(gate_id):
             outside_gross_weight,
             outside_tare_weight,
             own_weighbridge,
+            billing_calculation_required,
             gate_in_datetime,
             direction,
             status,
@@ -665,11 +678,16 @@ def update_gate_entry(gate_id):
             gate_id
         ))
 
-        # Handle Cargo Operation updates (vessel_id, compressor_no) if relevant
+        # Handle Cargo Operation updates (vessel_id, compressor_no, datetimes) if relevant
         vessel_id = data.get("vessel_id")
+        if vessel_id == "": vessel_id = None
         compressor_no = data.get("compressor_no")
+        cargo_start_datetime = data.get("cargo_start_datetime")
+        if cargo_start_datetime == "": cargo_start_datetime = None
+        cargo_end_datetime = data.get("cargo_end_datetime")
+        if cargo_end_datetime == "": cargo_end_datetime = None
 
-        if vessel_id is not None or compressor_no is not None:
+        if vessel_id is not None or compressor_no is not None or cargo_start_datetime is not None or cargo_end_datetime is not None:
             # Check if cargo operation exists
             cursor.execute("SELECT id FROM cargo_operations WHERE gate_entry_id = %s LIMIT 1", (gate_id,))
             op_row = cursor.fetchone()
@@ -680,17 +698,19 @@ def update_gate_entry(gate_id):
                     UPDATE cargo_operations
                     SET vessel_id = %s,
                         compressor_no = %s,
+                        start_datetime = %s,
+                        end_datetime = %s,
                         updated_at = NOW()
                     WHERE id = %s
-                """, (vessel_id, compressor_no, op_id))
+                """, (vessel_id, compressor_no, cargo_start_datetime, cargo_end_datetime, op_id))
             else:
                 if vessel_id:
                     op_type = "LOADING" if direction == "IMPORT" else "UNLOADING"
-                    start_dt = gate_in_datetime or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    start_dt = cargo_start_datetime or gate_in_datetime or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     cursor.execute("""
-                        INSERT INTO cargo_operations (gate_entry_id, vessel_id, operation_type, start_datetime, compressor_no, remarks)
-                        VALUES (%s, %s, %s, %s, %s, %s)
-                    """, (gate_id, vessel_id, op_type, start_dt, compressor_no, ""))
+                        INSERT INTO cargo_operations (gate_entry_id, vessel_id, operation_type, start_datetime, end_datetime, compressor_no, remarks)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    """, (gate_id, vessel_id, op_type, start_dt, cargo_end_datetime, compressor_no, ""))
 
         conn.commit()
 
@@ -709,6 +729,7 @@ def update_gate_entry(gate_id):
                 ge.outside_tare_weight,
                 ge.outside_net_weight,
                 ge.own_weighbridge,
+                ge.billing_calculation_required,
                 ge.status,
                 ge.direction,
                 ge.gate_out_datetime,
@@ -721,10 +742,11 @@ def update_gate_entry(gate_id):
                 pm.party_code,
                 vm.vehicle_no,
                 vm.transporter_name,
-                v.id AS vessel_id,
                 v.vessel_name,
                 co.id AS cargo_operation_id,
                 co.compressor_no,
+                co.start_datetime AS cargo_start_datetime,
+                co.end_datetime AS cargo_end_datetime,
                 COALESCE(wbo.net_weight, ge.outside_net_weight) AS net_weight,
                 wbi.gross_weight AS wbin_gross_weight,
                 wbi.tare_weight AS wbin_tare_weight,
