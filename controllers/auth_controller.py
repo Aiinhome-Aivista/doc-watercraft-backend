@@ -163,10 +163,10 @@ def login():
 def change_password():
     data = request.get_json()
 
-    if not data or not data.get("old_password") or not data.get("new_password"):
+    if not data or not data.get("new_password"):
         return jsonify({
             "status": "error",
-            "message": "Old and new password required"
+            "message": "New password required"
         }), 400
 
     try:
@@ -175,20 +175,12 @@ def change_password():
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        # 🔹 Verify old password
-        cursor.execute("SELECT password FROM users WHERE id=%s", (user_id,))
-        user = cursor.fetchone()
-
-        if not user:
+        # 🔹 Check user exists
+        cursor.execute("SELECT id FROM users WHERE id=%s", (user_id,))
+        if not cursor.fetchone():
             return jsonify({
                 "status": "error",
                 "message": "User not found"
-            }), 400
-        stored_hash = user[0]
-        if not bcrypt.checkpw(data["old_password"].encode('utf-8'), stored_hash.encode('utf-8') if isinstance(stored_hash, str) else stored_hash):
-            return jsonify({
-                "status": "error",
-                "message": "Old password incorrect"
             }), 400
 
         # 🔹 Update password with new hash
