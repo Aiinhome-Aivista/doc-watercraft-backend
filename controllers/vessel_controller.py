@@ -775,6 +775,7 @@ def get_vehicle_movement_report():
                 co.end_datetime AS cargo_end_datetime,
                 v.vessel_name,
                 v.berthing_datetime,
+                v.mooring_datetime,
                 v.sailing_datetime,
                 v.survey_quantity
             {base_query}

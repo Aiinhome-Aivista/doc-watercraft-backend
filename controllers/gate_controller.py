@@ -157,6 +157,7 @@ def get_gate_entries():
                 pm.party_code,
                 vm.vehicle_no,
                 vm.transporter_name,
+                co.vessel_id,
                 v.vessel_name,
                 co.id AS cargo_operation_id,
                 co.compressor_no,
