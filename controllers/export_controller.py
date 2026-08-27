@@ -270,7 +270,9 @@ def export_vehicle_movement_report():
                 v.id AS vessel_id,
                 v.vessel_name,
                 v.berthing_datetime,
+                v.mooring_datetime,
                 v.sailing_datetime,
+                v.expected_date,
                 v.survey_quantity
             {base_query}
             ORDER BY ge.gate_in_datetime ASC
@@ -288,6 +290,8 @@ def export_vehicle_movement_report():
             if v_name not in vessel_groups:
                 vessel_groups[v_name] = {
                     "vessel_name": v_name,
+                    "expected_date": d.get("expected_date"),
+                    "mooring_datetime": d.get("mooring_datetime"),
                     "berthing_datetime": d.get("berthing_datetime"),
                     "sailing_datetime": d.get("sailing_datetime"),
                     "survey_quantity": d.get("survey_quantity"),
@@ -460,8 +464,13 @@ def export_vehicle_movement_report():
                 c2_lbl = ws.cell(row=current_row, column=3, value="Vessel berthing date/time")
                 
                 b_dt = v_data["berthing_datetime"]
-                b_dt_str = b_dt.strftime("%d.%m.%Y") if isinstance(b_dt, datetime) else (b_dt or "")
+                b_dt_str = b_dt.strftime("%d.%m.%Y %H:%M") if isinstance(b_dt, datetime) else (b_dt or "")
                 c2_val = ws.cell(row=current_row, column=4, value=b_dt_str)
+
+                c5_lbl = ws.cell(row=current_row, column=5, value="ETA")
+                eta_dt = v_data.get("expected_date")
+                eta_dt_str = eta_dt.strftime("%d.%m.%Y") if isinstance(eta_dt, datetime) else (eta_dt or "")
+                c5_val = ws.cell(row=current_row, column=6, value=eta_dt_str)
 
                 # Row 2
                 ws.row_dimensions[current_row + 1].height = 20
@@ -472,17 +481,22 @@ def export_vehicle_movement_report():
                 c4_lbl = ws.cell(row=current_row + 1, column=3, value="Vessel UNberthing date/time")
                 
                 s_dt = v_data["sailing_datetime"]
-                s_dt_str = s_dt.strftime("%d.%m.%Y") if isinstance(s_dt, datetime) else (s_dt or "")
+                s_dt_str = s_dt.strftime("%d.%m.%Y %H:%M") if isinstance(s_dt, datetime) else (s_dt or "")
                 c4_val = ws.cell(row=current_row + 1, column=4, value=s_dt_str)
+
+                c6_lbl = ws.cell(row=current_row + 1, column=5, value="Mooring date/time")
+                m_dt = v_data.get("mooring_datetime")
+                m_dt_str = m_dt.strftime("%d.%m.%Y %H:%M") if isinstance(m_dt, datetime) else (m_dt or "")
+                c6_val = ws.cell(row=current_row + 1, column=6, value=m_dt_str)
 
                 # Format Vessel Header Block cells
                 for r in range(current_row, current_row + 2):
-                    for col in range(1, 5):
+                    for col in range(1, 7):
                         cell = ws.cell(row=r, column=col)
                         cell.font = vessel_header_font
                         cell.fill = vessel_header_fill
                         cell.border = thin_border
-                        if col in [1, 3]:
+                        if col in [1, 3, 5]:
                             cell.alignment = left_align
                         else:
                             cell.alignment = center_align
@@ -871,4 +885,4 @@ def export_bills_report():
         return jsonify({
             "success": False,
             "message": str(e)
-        }), 500
+        }), 500
